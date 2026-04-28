@@ -1,0 +1,18 @@
+{
+    "stove": {
+        "watts": 1200.0,
+        "hours": 4.0
+    },
+    "aircon": {
+        "watts": 800.0,
+        "hours": 13.0
+    },
+    "soadwm": {
+        "watts": 600.0,
+        "hours": 4.0
+    },
+    "iajda": {
+        "watts": 400.0,
+        "hours": 12.0
+    }
+}
