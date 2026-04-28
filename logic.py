@@ -1,6 +1,6 @@
 def compute_kwh(watts, hours):
-    # monthly kWh
-    return (watts * hours * 30) / 1000
+    # daily kWh
+    return (watts * hours) / 1000
 
 def compute_all(data):
     results = []

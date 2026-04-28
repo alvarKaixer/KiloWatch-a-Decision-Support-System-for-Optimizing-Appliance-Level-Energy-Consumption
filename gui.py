@@ -12,9 +12,9 @@ from utils import format_kwh, generate_recommendation, generate_overall_insight
 THEMES = {
     "light": {
         # Backgrounds
-        "BG":           "#f0f4f8",   # cool slate-grey page bg
-        "CARD":         "#ffffff",   # pure white cards
-        "CARD2":        "#f0f4f8",   # input field fill
+        "BG":           "#b0e1ff",   # cool slate-grey page bg
+        "CARD":         "#d6f1ff",   # pure white cards
+        "CARD2":        "#b0e1ff",   # input field fill
         "HOME_BG":      "#0f1c2e",   # deep navy for home
         "HOME_CARD":    "#1a2d45",   # slightly lighter navy card
 
@@ -24,7 +24,7 @@ THEMES = {
         # Brand accents
         "ACCENT":       "#1a6fc4",   # strong blue — interactive
         "ACCENT2":      "#0d4f91",   # darker blue — headers
-        "ACCENT3":      "#f5a623",   # warm amber — highlight / CTA
+        "ACCENT3":      "#e6a63f",   # warm amber — highlight / CTA
 
         # Text
         "TEXT":         "#0d1b2a",   # near-black — always readable on white
@@ -35,8 +35,8 @@ THEMES = {
         # Semantic
         "DANGER":       "#c0392b",
         "SUCCESS":      "#1a7a3e",
-        "GOLD":         "#ffa200",
-        "WARNING":      "#ff9900",
+        "GOLD":         "#e6a63f",
+        "WARNING":      "#e6a63f",
 
         # Buttons — each has enough contrast against CARD white
         "BTN_ADD":      "#1a6fc4",   # blue
@@ -45,13 +45,13 @@ THEMES = {
         "BTN_REP_FG":   "#ffffff",
         "BTN_CLR":      "#6b7e8f",   # neutral slate
         "BTN_CLR_FG":   "#ffffff",
-        "BTN_HIST":     "#6b3fa0",   # purple
+        "BTN_HIST":     "#1d5fa8",   # blue
         "BTN_HIST_FG":  "#ffffff",
-        "BTN_CMP":      "#ffc400",   # deep amber
+        "BTN_CMP":      "#e6a63f",   # deep amber
         "BTN_CMP_FG":   "#ffffff",
         "BTN_HOME":     "#1a2d45",   # navy — readable on any bg
         "BTN_HOME_FG":  "#f0f4f8",
-        "BTN_THEME":    "#f5a623",   # amber CTA
+        "BTN_THEME":    "#e6a63f",   # amber CTA
         "BTN_THEME_FG": "#0d1b2a",
         "BTN_REMOVE":   "#c0392b",
         "BTN_REMOVE_FG":"#ffffff",
@@ -69,9 +69,9 @@ THEMES = {
         "BORDER":       "#2a3a4e",
 
         # Brand accents
-        "ACCENT":       "#4da3ff",   # bright sky-blue — visible on dark
-        "ACCENT2":      "#7ec8ff",   # lighter blue — for secondary highlights
-        "ACCENT3":      "#fbbf24",   # amber — consistent brand highlight
+        "ACCENT":       "#1a6fc4",   # bright sky-blue — visible on dark
+        "ACCENT2":      "#0d4f91",   # lighter blue — for secondary highlights
+        "ACCENT3":      "#e6a63f",   # amber — consistent brand highlight
 
         # Text
         "TEXT":         "#e6edf3",   # near-white — always readable on dark
@@ -82,8 +82,8 @@ THEMES = {
         # Semantic
         "DANGER":       "#f87171",   # bright red — visible on dark
         "SUCCESS":      "#4ade80",   # bright green — visible on dark
-        "GOLD":         "#fbbf24",
-        "WARNING":      "#fb923c",
+        "GOLD":         "#e6a63f",
+        "WARNING":      "#e6a63f",
 
         # Buttons — all have light fg for contrast on dark surfaces
         "BTN_ADD":      "#1d5fa8",
@@ -92,13 +92,13 @@ THEMES = {
         "BTN_REP_FG":   "#e6edf3",
         "BTN_CLR":      "#2a3a4e",
         "BTN_CLR_FG":   "#a8c4d8",
-        "BTN_HIST":     "#4a2d80",
+        "BTN_HIST":     "#1d5fa8",
         "BTN_HIST_FG":  "#e6edf3",
-        "BTN_CMP":      "#ffe601",
+        "BTN_CMP":      "#e6a63f",
         "BTN_CMP_FG":   "#e6edf3",
         "BTN_HOME":     "#1e3a5a",   # visible dark-blue, NOT black
         "BTN_HOME_FG":  "#e6edf3",
-        "BTN_THEME":    "#fbbf24",
+        "BTN_THEME":    "#e6a63f",
         "BTN_THEME_FG": "#0d1117",
         "BTN_REMOVE":   "#a02020",
         "BTN_REMOVE_FG":"#e6edf3",
@@ -257,7 +257,7 @@ class KiloWatchApp:
             ("⚡", "Track Usage",     "Log your appliances\nand daily watt-hours"),
             ("📊", "Generate Reports", "Ranked energy breakdown\nwith smart insights"),
             ("⇄",  "Compare Reports", "Pick any two snapshots\nand analyse changes"),
-            ("💡", "Get Suggestions", "AI-powered tips to cut\nyour electricity bill"),
+            ("💡", "Get Suggestions", "Smart tips to cut\nyour electricity bill"),
         ]
         for icon, title, desc in features:
             fc = tk.Frame(cards_row, bg=card_bg,
@@ -287,7 +287,7 @@ class KiloWatchApp:
 
         # Footer
         tk.Label(self.home_frame,
-                 text="Capstone Research Project  •  Energy Monitoring System",
+                 text="Developed by Kaixer Alvar",
                  font=("Segoe UI", 8), fg=fg_muted, bg=bg
                  ).place(relx=0.5, rely=0.97, anchor="center")
 
@@ -383,9 +383,45 @@ class KiloWatchApp:
         left.columnconfigure(0, weight=1)
 
         self._build_input_card(left)
+        self._build_rate_card(left)
         self._build_action_buttons(left)
         self._build_output_card(left)
         self._build_history_panel(body)
+    
+    def _build_rate_card(self, parent):
+        T = self.T
+        card = self._card(parent)
+        card.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+
+        self._section_label(card, "ELECTRICITY RATE  (optional)", T["ACCENT3"])
+
+        hint = tk.Label(
+            card,
+            text="Enter your provider's rate per kWh to estimate your monthly bill.\n"
+                 "Meralco Apr 2026: ₱14.3496/kWh  —  leave blank to skip bill estimate.",
+            font=("Segoe UI", 8), fg=T["MUTED"], bg=T["CARD"],
+            justify="left", wraplength=500
+        )
+        hint.pack(anchor="w", padx=16, pady=(0, 6))
+
+        rate_row = tk.Frame(card, bg=T["CARD"])
+        rate_row.pack(fill="x", padx=16, pady=(0, 12))
+        rate_row.columnconfigure(0, weight=1)
+
+        self.rate_entry = tk.Entry(
+            rate_row, font=self.f_entry,
+            bg=T["CARD2"], fg=T["TEXT"],
+            insertbackground=T["ACCENT"],
+            relief="flat", bd=0,
+            highlightthickness=1,
+            highlightbackground=T["BORDER"],
+            highlightcolor=T["ACCENT"],
+        )
+        self.rate_entry.insert(0, "14.3496")
+        self.rate_entry.pack(side="left", fill="x", expand=True, ipady=6)
+
+        tk.Label(rate_row, text="₱ / kWh", font=("Segoe UI", 9),
+                 fg=T["MUTED"], bg=T["CARD"]).pack(side="left", padx=(8, 0))
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _tick_clock(self):
@@ -414,7 +450,23 @@ class KiloWatchApp:
 
         self.name_entry  = self._field(fields, "Appliance Name", col=0)
         self.watts_entry = self._field(fields, "Watts (W)",      col=1)
-        self.hours_entry = self._field(fields, "Hours / Day",    col=2)
+        self.hours_entry = self._field(fields, "Usage / Day",    col=2)
+
+        # Unit toggle — hours or minutes
+        unit_row = tk.Frame(fields, bg=T["CARD"])
+        unit_row.grid(row=1, column=2, sticky="w", padx=(6, 0), pady=(4, 0))
+        self.time_unit = tk.StringVar(value="Hours")
+        for unit in ("Hours", "Minutes"):
+            tk.Radiobutton(
+                unit_row, text=unit,
+                variable=self.time_unit, value=unit,
+                font=("Segoe UI", 8),
+                bg=T["CARD"], fg=T["MUTED"],
+                selectcolor=T["CARD2"],
+                activebackground=T["CARD"],
+                relief="flat", bd=0
+            ).pack(side="left", padx=(0, 8))
+
 
         self._btn(card, "＋  Add Appliance",
                   T["BTN_ADD"], T["BTN_ADD_FG"],
@@ -440,7 +492,7 @@ class KiloWatchApp:
     def _build_action_buttons(self, parent):
         T = self.T
         row = tk.Frame(parent, bg=T["BG"])
-        row.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        row.grid(row=2, column=0, sticky="ew", pady=(0, 8))
         row.columnconfigure(0, weight=1)
         row.columnconfigure(1, weight=1)
 
@@ -455,7 +507,7 @@ class KiloWatchApp:
     def _build_output_card(self, parent):
         T = self.T
         out_card = self._card(parent)
-        out_card.grid(row=2, column=0, sticky="nsew")
+        out_card.grid(row=3, column=0, sticky="nsew")
         out_card.rowconfigure(1, weight=1)
         out_card.columnconfigure(0, weight=1)
 
@@ -506,7 +558,7 @@ class KiloWatchApp:
         self.output.tag_configure("warning", foreground=T["DANGER"],   font=("Segoe UI", 9, "italic"))
         self.output.tag_configure("good",    foreground=T["SUCCESS"],  font=("Segoe UI", 9))
 
-        parent.rowconfigure(2, weight=1)
+        parent.rowconfigure(3, weight=1)
         self._write_placeholder()
 
     # ── History Panel (right) ─────────────────────────────────────────────────
@@ -805,13 +857,22 @@ class KiloWatchApp:
             messagebox.showerror("Missing Fields", "Please fill in all three fields.")
             return
         try:
-            add_appliance(name, float(watts), float(hours))
+            watts_f = float(watts)
+            hours_f = float(hours)
+            unit    = self.time_unit.get()
+
+            # Convert minutes to hours for internal storage
+            if unit == "Minutes":
+                hours_f = hours_f / 60
+
+            add_appliance(name, watts_f, hours_f)
             for e in (self.name_entry, self.watts_entry, self.hours_entry):
                 e.delete(0, tk.END)
+            self.time_unit.set("Hours")
             self._set_status(False)
             self._refresh_output_appliances()
         except ValueError:
-            messagebox.showerror("Invalid Input", "Watts and Hours must be numbers.")
+            messagebox.showerror("Invalid Input", "Watts and Usage must be numbers.")
 
     def remove(self):
         name = self.remove_var.get().strip()
@@ -841,10 +902,11 @@ class KiloWatchApp:
 
         for i, (name, kwh) in enumerate(ranked, 1):
             medal = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"  {i}."
+            monthly_kwh = kwh * 30
             self.output.insert(tk.END, f"\n{medal}  {name}\n", "name")
-            self.output.insert(tk.END, f"     {format_kwh(kwh)}\n", "kwh")
+            self.output.insert(tk.END, f"     {format_kwh(kwh, 'kWh/day')}  |  {format_kwh(monthly_kwh, 'kWh/month')}\n", "kwh")
             self.output.insert(tk.END,
-                f"     ↳ {generate_recommendation(name, kwh)}\n", "rec")
+                f"     ↳ {generate_recommendation(name, monthly_kwh)}\n", "rec")
 
         self.output.insert(tk.END, "\n" + "─" * 48 + "\n", "divider")
         insight = generate_overall_insight(ranked)
@@ -852,8 +914,22 @@ class KiloWatchApp:
 
         total   = sum(kwh for _, kwh in ranked)
         monthly = total * 30
-        self.output.insert(tk.END, f"\n📊  Daily Total : {format_kwh(total)}\n", "section")
-        self.output.insert(tk.END, f"    Monthly Est. : {format_kwh(monthly)}\n", "section")
+
+        self.output.insert(tk.END, f"    Daily Total   : {format_kwh(total, 'kWh/day')}\n", "section")
+        self.output.insert(tk.END, f"    Monthly Est.  : {format_kwh(monthly, 'kWh/month')}\n", "section")
+
+        rate_str = self.rate_entry.get().strip()
+        if rate_str:
+            try:
+                rate = float(rate_str)
+                if rate > 0:
+                    bill = monthly * rate
+                    self.output.insert(tk.END, f"    Est. Bill     : ₱{bill:,.2f}/month\n", "section")
+                    self.output.insert(tk.END, f"    Rate Used     : ₱{rate:.4f}/kWh\n", "section")
+                else:
+                    self.output.insert(tk.END, "    Est. Bill     : (rate must be > 0)\n", "warning")
+            except ValueError:
+                self.output.insert(tk.END, "    Est. Bill     : (invalid rate entered)\n", "warning")
 
         self._lock()
         self._set_status(True)
@@ -917,11 +993,12 @@ class KiloWatchApp:
             b = dict_b.get(name)
             if a is None:
                 self.cmp_output.insert(tk.END, f"＋ {name}\n", "better")
-                self.cmp_output.insert(tk.END, f"   NEW in B → {format_kwh(b)}\n\n", "better")
+                self.cmp_output.insert(tk.END,
+                    f"   NEW in B → {format_kwh(b, 'kWh/day')} ({format_kwh(b * 30, 'kWh/month')})\n\n", "better")
             elif b is None:
                 self.cmp_output.insert(tk.END, f"－ {name}\n", "worse")
                 self.cmp_output.insert(tk.END,
-                    f"   {format_kwh(a)} in A  →  Removed in B\n\n", "same")
+                    f"   {format_kwh(a, 'kWh/day')} ({format_kwh(a * 30, 'kWh/month')}) in A  →  Removed in B\n\n", "same")
             else:
                 diff = b - a
                 pct  = (diff / a * 100) if a else 0
@@ -929,8 +1006,9 @@ class KiloWatchApp:
                 tag  = "worse" if diff > 0 else ("better" if diff < 0 else "same")
                 self.cmp_output.insert(tk.END, f"  {name}\n", "head")
                 self.cmp_output.insert(tk.END,
-                    f"   A: {format_kwh(a)}  →  B: {format_kwh(b)}  "
-                    f"({sign} {abs(pct):.1f}%)\n\n", tag)
+                    f"   A: {format_kwh(a, 'kWh/day')} ({format_kwh(a * 30, 'kWh/month')})"
+                    f"  →  B: {format_kwh(b, 'kWh/day')} ({format_kwh(b * 30, 'kWh/month')})"
+                    f"  ({sign} {abs(pct):.1f}%)\n\n", tag)
                 if diff > 0 and pct > 10:
                     suggestions.append((name, pct, b))
                 elif diff < 0 and abs(pct) > 10:
@@ -945,7 +1023,8 @@ class KiloWatchApp:
         self.cmp_output.insert(tk.END, "─" * 30 + "\n", "divider")
         self.cmp_output.insert(tk.END, "OVERALL TOTALS\n", "head")
         self.cmp_output.insert(tk.END,
-            f"   A: {format_kwh(total_a)}  →  B: {format_kwh(total_b)}\n", total_tag)
+            f"   A: {format_kwh(total_a, 'kWh/day')} ({format_kwh(total_a * 30, 'kWh/month')})"
+            f"  →  B: {format_kwh(total_b, 'kWh/day')} ({format_kwh(total_b * 30, 'kWh/month')})\n", total_tag)
         sign = "▲" if total_diff > 0 else "▼"
         self.cmp_output.insert(tk.END,
             f"   {sign} {abs(total_pct):.1f}% overall change\n\n", total_tag)
