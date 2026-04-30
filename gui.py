@@ -1,9 +1,13 @@
 import tkinter as tk
-from tkinter import messagebox, ttk, simpledialog
+from tkinter import messagebox, ttk, simpledialog, filedialog
+import csv
+import os
 import datetime
 from data_manager import add_appliance, get_all, remove_appliance
+from persistence import save_appliances, load_appliances, save_history, load_history
 from logic import compute_all, rank_appliances
 from utils import format_kwh, generate_recommendation, generate_overall_insight
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  THEME DEFINITIONS  — Refined, high-contrast palettes
@@ -12,101 +16,201 @@ from utils import format_kwh, generate_recommendation, generate_overall_insight
 THEMES = {
     "light": {
         # Backgrounds
-        "BG":           "#b0e1ff",   # cool slate-grey page bg
-        "CARD":         "#d6f1ff",   # pure white cards
-        "CARD2":        "#b0e1ff",   # input field fill
-        "HOME_BG":      "#0f1c2e",   # deep navy for home
-        "HOME_CARD":    "#1a2d45",   # slightly lighter navy card
+        "BG":           "#f0f4f8",   # clean off-white page bg
+        "CARD":         "#ffffff",   # pure white cards
+        "CARD2":        "#f5f7fa",   # input field fill — barely-grey
+        "HOME_BG":      "#0f1c2e",   # deep navy for home (unchanged)
+        "HOME_CARD":    "#1a2d45",   # home feature cards (unchanged)
 
         # Borders / dividers
-        "BORDER":       "#d1dde9",
+        "BORDER":       "#e2e8f0",   # very subtle light grey
 
         # Brand accents
-        "ACCENT":       "#1a6fc4",   # strong blue — interactive
-        "ACCENT2":      "#0d4f91",   # darker blue — headers
-        "ACCENT3":      "#e6a63f",   # warm amber — highlight / CTA
+        "ACCENT":       "#2563eb",   # Google/Apple-style vivid blue
+        "ACCENT2":      "#1e40af",   # deeper blue — headers
+        "ACCENT3":      "#f59e0b",   # clean amber yellow — highlights
 
         # Text
-        "TEXT":         "#0d1b2a",   # near-black — always readable on white
-        "TEXT_ON_DARK": "#f0f4f8",   # near-white — for text on dark/navy bg
-        "MUTED":        "#5a7a99",   # medium slate — secondary text on cards
-        "MUTED_DARK":   "#8bafc9",   # lighter muted — secondary text on dark bg
+        "TEXT":         "#111827",   # near-black — crisp on white
+        "TEXT_ON_DARK": "#f0f4f8",
+        "MUTED":        "#6b7280",   # neutral grey — secondary text
+        "MUTED_DARK":   "#8bafc9",
 
         # Semantic
-        "DANGER":       "#c0392b",
-        "SUCCESS":      "#1a7a3e",
-        "GOLD":         "#e6a63f",
-        "WARNING":      "#e6a63f",
+        "DANGER":       "#dc2626",
+        "SUCCESS":      "#16a34a",
+        "GOLD":         "#f59e0b",
+        "WARNING":      "#f59e0b",
 
-        # Buttons — each has enough contrast against CARD white
-        "BTN_ADD":      "#1a6fc4",   # blue
+        # Buttons
+        "BTN_ADD":      "#2563eb",
         "BTN_ADD_FG":   "#ffffff",
-        "BTN_REP":      "#0d4f91",   # deep blue
+        "BTN_REP":      "#1e40af",
         "BTN_REP_FG":   "#ffffff",
-        "BTN_CLR":      "#6b7e8f",   # neutral slate
-        "BTN_CLR_FG":   "#ffffff",
-        "BTN_HIST":     "#1d5fa8",   # blue
+        "BTN_CLR":      "#e2e8f0",
+        "BTN_CLR_FG":   "#374151",
+        "BTN_HIST":     "#2563eb",
         "BTN_HIST_FG":  "#ffffff",
-        "BTN_CMP":      "#e6a63f",   # deep amber
+        "BTN_CMP":      "#f59e0b",
         "BTN_CMP_FG":   "#ffffff",
-        "BTN_HOME":     "#1a2d45",   # navy — readable on any bg
-        "BTN_HOME_FG":  "#f0f4f8",
-        "BTN_THEME":    "#e6a63f",   # amber CTA
-        "BTN_THEME_FG": "#0d1b2a",
-        "BTN_REMOVE":   "#c0392b",
+        "BTN_HOME":     "#1e3a5a",
+        "BTN_HOME_FG":  "#ffffff",
+        "BTN_THEME":    "#f59e0b",
+        "BTN_THEME_FG": "#111827",
+        "BTN_REMOVE":   "#dc2626",
         "BTN_REMOVE_FG":"#ffffff",
     },
 
     "dark": {
-        # Backgrounds
-        "BG":           "#0d1117",   # true near-black
-        "CARD":         "#161b22",   # GitHub-dark-style card
-        "CARD2":        "#0d1117",   # input fill = page bg
-        "HOME_BG":      "#080c12",   # deepest dark for home
-        "HOME_CARD":    "#0f1620",   # home feature cards
+        # Backgrounds — layered neutrals, not pure black
+        "BG":           "#0f172a",   # deep navy-slate page bg
+        "CARD":         "#1e293b",   # slightly lighter card surface
+        "CARD2":        "#0f172a",   # input fill = page bg
+        "HOME_BG":      "#080e1a",   # deepest dark for home
+        "HOME_CARD":    "#162032",   # home feature cards
 
-        # Borders / dividers
-        "BORDER":       "#2a3a4e",
+        # Borders / dividers — subtle, not harsh
+        "BORDER":       "#334155",
 
         # Brand accents
-        "ACCENT":       "#1a6fc4",   # bright sky-blue — visible on dark
-        "ACCENT2":      "#0d4f91",   # lighter blue — for secondary highlights
-        "ACCENT3":      "#e6a63f",   # amber — consistent brand highlight
+        "ACCENT":       "#3b82f6",   # vivid blue — pops on dark
+        "ACCENT2":      "#1e40af",   # deeper blue — headers
+        "ACCENT3":      "#fbbf24",   # clean amber yellow
 
         # Text
-        "TEXT":         "#e6edf3",   # near-white — always readable on dark
-        "TEXT_ON_DARK": "#e6edf3",   # same — dark mode is already dark bg
-        "MUTED":        "#7d9ab5",   # muted blue-grey — secondary on dark cards
-        "MUTED_DARK":   "#7d9ab5",   # same
+        "TEXT":         "#f1f5f9",   # near-white — crisp on dark
+        "TEXT_ON_DARK": "#f1f5f9",
+        "MUTED":        "#94a3b8",   # slate-400 — readable secondary text
+        "MUTED_DARK":   "#94a3b8",
 
         # Semantic
-        "DANGER":       "#f87171",   # bright red — visible on dark
-        "SUCCESS":      "#4ade80",   # bright green — visible on dark
-        "GOLD":         "#e6a63f",
-        "WARNING":      "#e6a63f",
+        "DANGER":       "#f87171",
+        "SUCCESS":      "#4ade80",
+        "GOLD":         "#fbbf24",
+        "WARNING":      "#fbbf24",
 
-        # Buttons — all have light fg for contrast on dark surfaces
-        "BTN_ADD":      "#1d5fa8",
-        "BTN_ADD_FG":   "#e6edf3",
-        "BTN_REP":      "#14477d",
-        "BTN_REP_FG":   "#e6edf3",
-        "BTN_CLR":      "#2a3a4e",
-        "BTN_CLR_FG":   "#a8c4d8",
-        "BTN_HIST":     "#1d5fa8",
-        "BTN_HIST_FG":  "#e6edf3",
-        "BTN_CMP":      "#e6a63f",
-        "BTN_CMP_FG":   "#e6edf3",
-        "BTN_HOME":     "#1e3a5a",   # visible dark-blue, NOT black
-        "BTN_HOME_FG":  "#e6edf3",
-        "BTN_THEME":    "#e6a63f",
-        "BTN_THEME_FG": "#0d1117",
-        "BTN_REMOVE":   "#a02020",
-        "BTN_REMOVE_FG":"#e6edf3",
+        # Buttons — vivid enough to stand out on dark cards
+        "BTN_ADD":      "#2563eb",
+        "BTN_ADD_FG":   "#f1f5f9",
+        "BTN_REP":      "#1d4ed8",
+        "BTN_REP_FG":   "#f1f5f9",
+        "BTN_CLR":      "#334155",
+        "BTN_CLR_FG":   "#cbd5e1",
+        "BTN_HIST":     "#2563eb",
+        "BTN_HIST_FG":  "#f1f5f9",
+        "BTN_CMP":      "#fbbf24",
+        "BTN_CMP_FG":   "#0f172a",
+        "BTN_HOME":     "#1e3a5a",
+        "BTN_HOME_FG":  "#f1f5f9",
+        "BTN_THEME":    "#fbbf24",
+        "BTN_THEME_FG": "#0f172a",
+        "BTN_REMOVE":   "#dc2626",
+        "BTN_REMOVE_FG":"#f1f5f9",
     }
 }
+    
 
+class Toast:
+    def __init__(self, root, message, kind="info", duration=2800):
+        T_COLORS = {
+            "info":    ("#2563eb", "#ffffff"),
+            "success": ("#16a34a", "#ffffff"),
+            "error":   ("#dc2626", "#ffffff"),
+            "warning": ("#f59e0b", "#111827"),
+        }
+        bg, fg = T_COLORS.get(kind, T_COLORS["info"])
+
+        self.root = root
+        self.win = tk.Toplevel(root)
+        self.win.overrideredirect(True)
+        self.win.attributes("-topmost", True)
+        self.win.attributes("-alpha", 0.0)
+
+        icons = {"info": "ℹ", "success": "✓", "error": "✕", "warning": "⚠"}
+        icon  = icons.get(kind, "ℹ")
+
+        frame = tk.Frame(self.win, bg=bg, padx=18, pady=12)
+        frame.pack()
+
+        tk.Label(frame, text=icon, font=("Segoe UI", 13, "bold"),
+                 fg=fg, bg=bg).pack(side="left", padx=(0, 10))
+        tk.Label(frame, text=message, font=("Segoe UI", 10),
+                 fg=fg, bg=bg, wraplength=280, justify="left").pack(side="left")
+
+        self.win.update_idletasks()
+        w = self.win.winfo_width()
+        h = self.win.winfo_height()
+        sw = root.winfo_screenwidth()
+        sh = root.winfo_screenheight()
+        x = sw - w - 24
+        self._y_shown  = sh - h - 56
+        self._y_hidden = sh + 10
+        self.win.geometry(f"{w}x{h}+{x}+{self._y_hidden}")
+
+        self._alpha   = 0.0
+        self._sliding = True
+        self._fade_in()
+        root.after(duration, self._start_fade_out)
+
+    def _fade_in(self):
+        sw = self.root.winfo_screenwidth()
+        w  = self.win.winfo_width()
+        h  = self.win.winfo_height()
+        sh = self.root.winfo_screenheight()
+        cur_y = int(self.win.geometry().split("+")[2])
+        target = self._y_shown
+        if cur_y > target:
+            new_y = max(target, cur_y - 18)
+            self.win.geometry(f"{w}x{h}+{sw - w - 24}+{new_y}")
+        self._alpha = min(1.0, self._alpha + 0.08)
+        self.win.attributes("-alpha", self._alpha)
+        if self._alpha < 1.0 or cur_y > target:
+            self.root.after(16, self._fade_in)
+
+    def _start_fade_out(self):
+        self._sliding = False
+        self._fade_out()
+
+    def _fade_out(self):
+        self._alpha = max(0.0, self._alpha - 0.06)
+        self.win.attributes("-alpha", self._alpha)
+        if self._alpha > 0:
+            self.root.after(16, self._fade_out)
+        else:
+            self.win.destroy()
+
+    def show(self):
+        return self
+    
+class Tooltip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text   = text
+        self.tip    = None
+        widget.bind("<Enter>", self._show)
+        widget.bind("<Leave>", self._hide)
+
+    def _show(self, event=None):
+        x = self.widget.winfo_rootx() + self.widget.winfo_width() // 2
+        y = self.widget.winfo_rooty() - 30
+        self.tip = tk.Toplevel(self.widget)
+        self.tip.overrideredirect(True)
+        self.tip.attributes("-topmost", True)
+        frm = tk.Frame(self.tip, bg="#1e293b", padx=8, pady=4)
+        frm.pack()
+        tk.Label(frm, text=self.text, font=("Segoe UI", 8),
+                 fg="#f1f5f9", bg="#1e293b").pack()
+        self.tip.update_idletasks()
+        w = self.tip.winfo_width()
+        self.tip.geometry(f"+{x - w//2}+{y}")
+
+    def _hide(self, event=None):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
 
 def _darken(hex_color, amount=20):
+    
     try:
         r = max(0, int(hex_color[1:3], 16) - amount)
         g = max(0, int(hex_color[3:5], 16) - amount)
@@ -149,6 +253,7 @@ class KiloWatchApp:
 
         self.root.minsize(900, 600)
         self.report_history = []
+        self._load_session()
         self._build_fonts()
         self._show_homescreen()
 
@@ -194,6 +299,17 @@ class KiloWatchApp:
     # ══════════════════════════════════════════════════════════════════════════
     #  HOME SCREEN
     # ══════════════════════════════════════════════════════════════════════════
+    def _load_session(self):
+        """Restore appliances and report history from disk."""
+        saved = load_appliances()
+        for name, info in saved.items():
+            add_appliance(name, info.get("watts", 0), info.get("hours", 0))
+        self.report_history = load_history()
+
+    def _save_session(self):
+        save_appliances(get_all())
+        save_history(self.report_history)
+
     def _show_homescreen(self):
         T = self.T
         bg = T["HOME_BG"]
@@ -300,6 +416,9 @@ class KiloWatchApp:
         self._build_ui()
         self._refresh_remove_menu()
         self._refresh_output_appliances()
+        for rpt in self.report_history:
+            self.hist_listbox.insert(tk.END, rpt.get("label", rpt["timestamp"]))
+        self._refresh_cmp_menus()
 
     # ══════════════════════════════════════════════════════════════════════════
     #  MAIN SYSTEM UI
@@ -372,56 +491,66 @@ class KiloWatchApp:
 
         # ── Body ──────────────────────────────────────────────────────────────
         body = tk.Frame(self.root, bg=T["BG"])
-        body.grid(row=1, column=0, sticky="nsew", padx=24, pady=16)
+        body.grid(row=1, column=0, sticky="nsew", padx=16, pady=10)
         body.rowconfigure(0, weight=1)
-        body.columnconfigure(0, weight=2)
-        body.columnconfigure(1, weight=1)
+        body.columnconfigure(0, weight=3)
+        body.columnconfigure(1, weight=2)
 
         left = tk.Frame(body, bg=T["BG"])
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 14))
-        left.rowconfigure(2, weight=1)
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left.rowconfigure(1, weight=1)   # output card gets all spare height
         left.columnconfigure(0, weight=1)
 
-        self._build_input_card(left)
-        self._build_rate_card(left)
-        self._build_action_buttons(left)
+        # ── Compact top strip: inputs + rate + buttons all in one row ──────────
+        top_strip = tk.Frame(left, bg=T["BG"])
+        top_strip.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        top_strip.columnconfigure(0, weight=3)   # input card
+        top_strip.columnconfigure(1, weight=1)   # rate + actions stacked
+
+        self._build_input_card(top_strip, grid_col=0)
+
+        right_strip = tk.Frame(top_strip, bg=self.T["BG"])
+        right_strip.grid(row=0, column=1, sticky="nsew")
+        right_strip.rowconfigure(0, weight=1)
+        right_strip.rowconfigure(1, weight=1)
+        right_strip.columnconfigure(0, weight=1)
+
+        self._build_rate_card(right_strip, grid_col=0, grid_row=0)
+        self._build_action_buttons(right_strip, grid_col=0, grid_row=1)
+
+        # ── Output fills the rest ─────────────────────────────────────────────
         self._build_output_card(left)
         self._build_history_panel(body)
     
-    def _build_rate_card(self, parent):
+    def _build_rate_card(self, parent, grid_col=1, grid_row=0):
         T = self.T
         card = self._card(parent)
-        card.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        card.grid(row=grid_row, column=grid_col, sticky="nsew", padx=(0, 0), pady=(0, 6))
 
-        self._section_label(card, "ELECTRICITY RATE  (optional)", T["ACCENT3"])
+        self._section_label(card, "RATE  (optional)", T["ACCENT3"])
 
-        hint = tk.Label(
-            card,
-            text="Enter your provider's rate per kWh to estimate your monthly bill.\n"
-                 "Meralco Apr 2026: ₱14.3496/kWh  —  leave blank to skip bill estimate.",
-            font=("Segoe UI", 8), fg=T["MUTED"], bg=T["CARD"],
-            justify="left", wraplength=500
-        )
-        hint.pack(anchor="w", padx=16, pady=(0, 6))
+        tk.Label(card, text="₱/kWh — Meralco Apr 2026: 14.3496",
+                 font=("Segoe UI", 7), fg=T["MUTED"], bg=T["CARD"],
+                 wraplength=160, justify="left"
+                 ).pack(anchor="w", padx=12, pady=(0, 4))
 
         rate_row = tk.Frame(card, bg=T["CARD"])
-        rate_row.pack(fill="x", padx=16, pady=(0, 12))
-        rate_row.columnconfigure(0, weight=1)
+        rate_row.pack(fill="x", padx=12, pady=(0, 12))
 
         self.rate_entry = tk.Entry(
-            rate_row, font=self.f_entry,
+            rate_row, font=("Segoe UI", 10),
             bg=T["CARD2"], fg=T["TEXT"],
             insertbackground=T["ACCENT"],
-            relief="flat", bd=0,
+            relief="flat", bd=0, width=9,
             highlightthickness=1,
             highlightbackground=T["BORDER"],
             highlightcolor=T["ACCENT"],
         )
         self.rate_entry.insert(0, "14.3496")
-        self.rate_entry.pack(side="left", fill="x", expand=True, ipady=6)
+        self.rate_entry.pack(side="left", ipady=5)
 
-        tk.Label(rate_row, text="₱ / kWh", font=("Segoe UI", 9),
-                 fg=T["MUTED"], bg=T["CARD"]).pack(side="left", padx=(8, 0))
+        tk.Label(rate_row, text="₱/kWh", font=("Segoe UI", 8),
+                 fg=T["MUTED"], bg=T["CARD"]).pack(side="left", padx=(6, 0))
 
     # ── Helpers ───────────────────────────────────────────────────────────────
     def _tick_clock(self):
@@ -435,10 +564,10 @@ class KiloWatchApp:
         self._show_homescreen()
 
     # ── Input Card ────────────────────────────────────────────────────────────
-    def _build_input_card(self, parent):
+    def _build_input_card(self, parent, grid_col=0):
         T = self.T
         card = self._card(parent)
-        card.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        card.grid(row=0, column=grid_col, sticky="nsew", padx=(0, 8))
 
         self._section_label(card, "ADD APPLIANCE", T["ACCENT"])
 
@@ -448,9 +577,9 @@ class KiloWatchApp:
         fields.columnconfigure(1, weight=1)
         fields.columnconfigure(2, weight=1)
 
-        self.name_entry  = self._field(fields, "Appliance Name", col=0)
-        self.watts_entry = self._field(fields, "Watts (W)",      col=1)
-        self.hours_entry = self._field(fields, "Usage / Day",    col=2)
+        self.name_entry  = self._field(fields, "Appliance Name", col=0, hint="e.g. Air Con")
+        self.watts_entry = self._field(fields, "Watts (W)",      col=1, hint="e.g. 750")
+        self.hours_entry = self._field(fields, "Usage / Day",    col=2, hint="e.g. 8")
 
         # Unit toggle — hours or minutes
         unit_row = tk.Frame(fields, bg=T["CARD"])
@@ -468,9 +597,15 @@ class KiloWatchApp:
             ).pack(side="left", padx=(0, 8))
 
 
-        self._btn(card, "＋  Add Appliance",
+        self.name_entry.bind("<Return>", lambda e: self.add())
+        self.watts_entry.bind("<Return>", lambda e: self.add())
+        self.hours_entry.bind("<Return>", lambda e: self.add())
+
+        add_btn = self._btn(card, "＋  Add Appliance",
                   T["BTN_ADD"], T["BTN_ADD_FG"],
-                  self.add).pack(fill="x", padx=16, pady=(0, 12))
+                  self.add)
+        add_btn.pack(fill="x", padx=16, pady=(0, 12))
+        Tooltip(add_btn, "Add this appliance to your list")
 
         tk.Frame(card, height=1, bg=T["BORDER"]).pack(fill="x", padx=16)
         self._section_label(card, "REMOVE APPLIANCE", T["DANGER"])
@@ -489,25 +624,62 @@ class KiloWatchApp:
                   self.remove).grid(row=0, column=1, sticky="ew", padx=(8, 0))
 
     # ── Action Buttons ────────────────────────────────────────────────────────
-    def _build_action_buttons(self, parent):
+    def _build_action_buttons(self, parent, grid_col=0, grid_row=1):
         T = self.T
-        row = tk.Frame(parent, bg=T["BG"])
-        row.grid(row=2, column=0, sticky="ew", pady=(0, 8))
-        row.columnconfigure(0, weight=1)
-        row.columnconfigure(1, weight=1)
 
-        self._btn(row, "⚡  Generate Report",
+        outer = tk.Frame(parent, bg=T["CARD"],
+                         highlightthickness=1, highlightbackground=T["BORDER"])
+        outer.grid(row=grid_row, column=grid_col, sticky="nsew")
+
+        tk.Label(outer, text="ACTIONS", font=self.f_small,
+                 fg=T["ACCENT2"], bg=T["CARD"]).pack(anchor="w", padx=12, pady=(10, 6))
+
+        # Generate — full width, tall, primary CTA
+        gen_btn = self._btn(outer, "⚡  Generate",
                   T["BTN_REP"], T["BTN_REP_FG"],
-                  self.report).grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        self._btn(row, "✕  Clear Output",
+                  self.report)
+        gen_btn.pack(fill="x", padx=10, pady=(0, 4))
+        Tooltip(gen_btn, "Compute and rank appliance energy usage")
+
+        clr_btn = self._btn(outer, "✕  Clear",
                   T["BTN_CLR"], T["BTN_CLR_FG"],
-                  self.clear_output).grid(row=0, column=1, sticky="ew", padx=(6, 0))
+                  self.clear_output)
+        clr_btn.pack(fill="x", padx=10, pady=(0, 4))
+        Tooltip(clr_btn, "Clear the output panel")
+
+        # More ▾ dropdown
+        more_btn = tk.Menubutton(
+            outer, text="⋯  More ▾",
+            font=self.f_btn,
+            bg=T["BTN_HIST"], fg=T["BTN_HIST_FG"],
+            activebackground=_lighten(T["BTN_HIST"], 15),
+            activeforeground=T["BTN_HIST_FG"],
+            relief="flat", bd=0, cursor="hand2",
+            padx=10, pady=8,
+            direction="below",
+        )
+        more_btn.pack(fill="x", padx=10, pady=(0, 10))
+
+        more_menu = tk.Menu(more_btn, tearoff=0,
+                            bg=T["CARD"], fg=T["TEXT"],
+                            activebackground=T["BTN_HIST"],
+                            activeforeground="#ffffff",
+                            font=("Segoe UI", 9),
+                            bd=0, relief="flat")
+        more_btn["menu"] = more_menu
+        more_menu.add_command(label="📋  Copy to Clipboard",
+                              command=self._copy_to_clipboard)
+        more_menu.add_separator()
+        more_menu.add_command(label="💾  Export as .TXT",
+                              command=lambda: self._export_report("txt"))
+        more_menu.add_command(label="📊  Export as .CSV",
+                              command=lambda: self._export_report("csv"))
 
     # ── Output Card ───────────────────────────────────────────────────────────
     def _build_output_card(self, parent):
         T = self.T
         out_card = self._card(parent)
-        out_card.grid(row=3, column=0, sticky="nsew")
+        out_card.grid(row=1, column=0, sticky="nsew")
         out_card.rowconfigure(1, weight=1)
         out_card.columnconfigure(0, weight=1)
 
@@ -558,7 +730,23 @@ class KiloWatchApp:
         self.output.tag_configure("warning", foreground=T["DANGER"],   font=("Segoe UI", 9, "italic"))
         self.output.tag_configure("good",    foreground=T["SUCCESS"],  font=("Segoe UI", 9))
 
-        parent.rowconfigure(3, weight=1)
+        # Bar chart canvas below the text output
+        chart_card = self._card(parent)
+        chart_card.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+
+        tk.Label(chart_card, text="USAGE CHART", font=self.f_small,
+                 fg=self.T["ACCENT2"], bg=self.T["CARD"]
+                 ).pack(anchor="w", padx=16, pady=(10, 4))
+
+        self.chart_canvas = tk.Canvas(
+            chart_card, height=160,
+            bg=self.T["CARD"], highlightthickness=0
+        )
+        self.chart_canvas.pack(fill="x", padx=16, pady=(0, 12))
+        self.chart_canvas.bind("<Configure>", lambda e: self._redraw_chart())
+        self._chart_data = []
+
+        parent.rowconfigure(1, weight=1)
         self._write_placeholder()
 
     # ── History Panel (right) ─────────────────────────────────────────────────
@@ -566,7 +754,7 @@ class KiloWatchApp:
         T = self.T
         panel = self._card(parent)
         panel.grid(row=0, column=1, sticky="nsew")
-        panel.rowconfigure(5, weight=1)
+        panel.rowconfigure(7, weight=1)
         panel.columnconfigure(0, weight=1)
 
         self._section_label(panel, "REPORT HISTORY", T["BTN_HIST"], row=0)
@@ -590,11 +778,23 @@ class KiloWatchApp:
         self.hist_listbox.config(yscrollcommand=hist_sb.set)
         self.hist_listbox.pack(side="left", fill="both", expand=True)
         hist_sb.pack(side="right", fill="y")
+        self.hist_listbox.bind("<<ListboxSelect>>", self._preview_history_entry)
+        btn_row_hist = tk.Frame(panel, bg=T["CARD"])
+        btn_row_hist.grid(row=2, column=0, sticky="ew", padx=12, pady=(4, 8))
+        btn_row_hist.columnconfigure(0, weight=1)
+        btn_row_hist.columnconfigure(1, weight=1)
 
-        self._btn(panel, "✎  Rename Selected Entry",
+        ren_btn = self._btn(btn_row_hist, "✎  Rename",
                   T["BTN_HIST"], T["BTN_HIST_FG"],
-                  self._rename_history_entry).grid(
-            row=2, column=0, sticky="ew", padx=12, pady=(4, 8))
+                  self._rename_history_entry)
+        ren_btn.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        Tooltip(ren_btn, "Rename the selected report")
+
+        del_btn = self._btn(btn_row_hist, "🗑  Delete",
+                  T["BTN_REMOVE"], T["BTN_REMOVE_FG"],
+                  self._delete_history_entry)
+        del_btn.grid(row=0, column=1, sticky="ew")
+        Tooltip(del_btn, "Delete the selected report")
 
         sel_frame = tk.Frame(panel, bg=T["CARD"])
         sel_frame.grid(row=3, column=0, sticky="ew", padx=12)
@@ -622,19 +822,19 @@ class KiloWatchApp:
         self._btn(panel, "⇄  Compare A  vs  B",
                   T["BTN_CMP"], T["BTN_CMP_FG"],
                   self.compare_reports).grid(
-            row=4, column=0, sticky="ew", padx=12, pady=(8, 4))
+            row=4, column=0, sticky="ew", padx=12, pady=(4, 2))
 
         tk.Frame(panel, height=1, bg=T["BORDER"]).grid(
-            row=5, column=0, sticky="ew", padx=16)
+            row=5, column=0, sticky="ew", padx=16, pady=(2, 0))
         tk.Label(panel, text="COMPARISON RESULTS", font=self.f_small,
                  fg=T["BTN_HIST"], bg=T["CARD"]).grid(
-            row=5, column=0, sticky="w", padx=16, pady=(8, 2))
+            row=6, column=0, sticky="w", padx=16, pady=(4, 2))
 
         cmp_frame = tk.Frame(panel, bg=T["CARD"])
-        cmp_frame.grid(row=6, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        cmp_frame.grid(row=7, column=0, sticky="nsew", padx=12, pady=(0, 12))
         cmp_frame.rowconfigure(0, weight=1)
         cmp_frame.columnconfigure(0, weight=1)
-        panel.rowconfigure(6, weight=1)
+        panel.rowconfigure(7, weight=1)
 
         cmp_sb = ttk.Scrollbar(cmp_frame, orient="vertical")
         cmp_sb.grid(row=0, column=1, sticky="ns")
@@ -695,7 +895,7 @@ class KiloWatchApp:
             font=("Segoe UI", 9),
         )
 
-    def _field(self, parent, placeholder, col):
+    def _field(self, parent, placeholder, col, hint=""):
         T = self.T
         wrapper = tk.Frame(parent, bg=T["CARD"])
         wrapper.grid(row=0, column=col, sticky="ew",
@@ -704,7 +904,7 @@ class KiloWatchApp:
                  fg=T["MUTED"], bg=T["CARD"]).pack(anchor="w")
         entry = tk.Entry(
             wrapper, font=self.f_entry,
-            bg=T["CARD2"], fg=T["TEXT"],
+            bg=T["CARD2"], fg=T["MUTED"],
             insertbackground=T["ACCENT"],
             relief="flat", bd=0,
             highlightthickness=1,
@@ -712,6 +912,35 @@ class KiloWatchApp:
             highlightcolor=T["ACCENT"],
         )
         entry.pack(fill="x", ipady=6)
+        # Inline error label
+        err_lbl = tk.Label(wrapper, text="", font=("Segoe UI", 7),
+                           fg=T["DANGER"], bg=T["CARD"])
+        err_lbl.pack(anchor="w")
+        entry._err_label = err_lbl
+
+        if hint:
+            entry.insert(0, hint)
+            entry._placeholder = hint
+            entry._has_placeholder = True
+        else:
+            entry._placeholder = ""
+            entry._has_placeholder = False
+
+        def _on_focus_in(e):
+            if entry._has_placeholder:
+                entry.delete(0, tk.END)
+                entry.config(fg=T["TEXT"])
+                entry._has_placeholder = False
+
+        def _on_focus_out(e):
+            if not entry.get().strip():
+                entry.delete(0, tk.END)
+                entry.insert(0, entry._placeholder)
+                entry.config(fg=T["MUTED"])
+                entry._has_placeholder = True
+
+        entry.bind("<FocusIn>", _on_focus_in)
+        entry.bind("<FocusOut>", _on_focus_out)
         return entry
 
     def _btn(self, parent, text, bg, fg, cmd):
@@ -736,6 +965,72 @@ class KiloWatchApp:
 
     def _lock(self):
         self.output.config(state="disabled")
+
+    def _redraw_chart(self):
+        c = self.chart_canvas
+        c.delete("all")
+        data = self._chart_data
+        if not data:
+            c.create_text(
+                c.winfo_width() // 2, 70,
+                text="Generate a report to see the chart",
+                font=("Segoe UI", 9), fill=self.T["MUTED"]
+            )
+            return
+
+        T       = self.T
+        W       = c.winfo_width() or 400
+        max_kwh = max(kwh for _, kwh in data) or 1
+        bar_h   = 22
+        gap     = 8
+        label_w = 130
+        val_w   = 72
+        bar_area = W - label_w - val_w - 16
+        colors   = [T["ACCENT"], T["ACCENT2"], T["ACCENT3"]]
+        medals   = ["🥇", "🥈", "🥉"]
+
+        for i, (name, kwh) in enumerate(data):
+            y      = i * (bar_h + gap) + 8
+            ratio  = kwh / max_kwh
+            bar_px = max(4, int(ratio * bar_area))
+            color  = colors[i] if i < 3 else T["MUTED"]
+
+            # Label
+            display = (name[:16] + "…") if len(name) > 17 else name
+            prefix  = medals[i] + "  " if i < 3 else f"  {i+1}.  "
+            c.create_text(
+                label_w - 6, y + bar_h // 2,
+                text=prefix + display,
+                anchor="e", font=("Segoe UI", 8),
+                fill=T["TEXT"]
+            )
+
+            # Background track
+            c.create_rectangle(
+                label_w, y,
+                label_w + bar_area, y + bar_h,
+                fill=T["CARD2"], outline="", width=0
+            )
+
+            # Filled bar with rounded feel (two rects + oval cap)
+            if bar_px > 0:
+                c.create_rectangle(
+                    label_w, y,
+                    label_w + bar_px, y + bar_h,
+                    fill=color, outline="", width=0
+                )
+
+            # Value label
+            monthly = kwh * 30
+            c.create_text(
+                label_w + bar_area + 6, y + bar_h // 2,
+                text=f"{kwh:.3f} kWh/d",
+                anchor="w", font=("Segoe UI", 8),
+                fill=T["MUTED"]
+            )
+
+        total_h = len(data) * (bar_h + gap) + 16
+        c.config(height=max(80, total_h))
 
     def _write_placeholder(self):
         self._unlock()
@@ -796,7 +1091,8 @@ class KiloWatchApp:
     def _save_report(self, ranked):
         ts = datetime.datetime.now().strftime("%b %d  %H:%M:%S")
         idx = len(self.report_history) + 1
-        default_label = f"[{idx}]  {ts}"
+        count = len(ranked)
+        default_label = f"[{idx}]  {count} appliance{'s' if count != 1 else ''}  —  {ts}"
         self.report_history.append({
             "timestamp": ts,
             "ranked":    ranked,
@@ -805,12 +1101,38 @@ class KiloWatchApp:
         self.hist_listbox.insert(tk.END, default_label)
         self.hist_listbox.see(tk.END)
         self._refresh_cmp_menus()
+        self._save_session()
+
+    def _preview_history_entry(self, event=None):
+        sel = self.hist_listbox.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        rpt = self.report_history[idx]
+        ranked = rpt["ranked"]
+        label  = rpt.get("label", rpt["timestamp"])
+
+        self._unlock()
+        self.output.delete("1.0", tk.END)
+        self.output.insert(tk.END, f"🕘  PREVIEW — {label}\n", "header")
+        self.output.insert(tk.END, "─" * 48 + "\n", "divider")
+        for i, (name, kwh) in enumerate(ranked, 1):
+            medal = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"  {i}."
+            monthly_kwh = kwh * 30
+            self.output.insert(tk.END, f"\n{medal}  {name}\n", "name")
+            self.output.insert(tk.END,
+                f"     {format_kwh(kwh, 'kWh/day')}  |  {format_kwh(monthly_kwh, 'kWh/month')}\n", "kwh")
+        self.output.insert(tk.END, "\n" + "─" * 48 + "\n", "divider")
+        total = sum(k for _, k in ranked)
+        self.output.insert(tk.END,
+            f"    Daily Total : {format_kwh(total, 'kWh/day')}\n"
+            f"    Monthly Est.: {format_kwh(total * 30, 'kWh/month')}\n", "section")
+        self._lock()
 
     def _rename_history_entry(self):
         sel = self.hist_listbox.curselection()
         if not sel:
-            messagebox.showinfo("No Selection",
-                "Click an entry in the Report History list first, then press Rename.")
+            Toast(self.root, "Select a report from the list first.", "warning")
             return
         idx = sel[0]
         rpt = self.report_history[idx]
@@ -826,7 +1148,7 @@ class KiloWatchApp:
             return
         new_name = new_name.strip()
         if not new_name:
-            messagebox.showerror("Empty Name", "Report name cannot be blank.")
+            Toast(self.root, "Report name cannot be blank.", "error")
             return
 
         rpt["label"] = new_name
@@ -834,6 +1156,21 @@ class KiloWatchApp:
         self.hist_listbox.insert(idx, new_name)
         self.hist_listbox.selection_set(idx)
         self._refresh_cmp_menus()
+
+    def _delete_history_entry(self):
+        sel = self.hist_listbox.curselection()
+        if not sel:
+            Toast(self.root, "Select a report from the list first.", "warning")
+            return
+        idx = sel[0]
+        rpt = self.report_history[idx]
+        label = rpt.get("label", f"Report #{idx + 1}")
+        if not messagebox.askyesno("Delete Entry", f"Delete '{label}' from history?"):
+            return
+        self.report_history.pop(idx)
+        self.hist_listbox.delete(idx)
+        self._refresh_cmp_menus()
+        self._write_placeholder()
 
     def _cmp_write(self, text, tag="same"):
         self.cmp_output.config(state="normal")
@@ -849,46 +1186,118 @@ class KiloWatchApp:
     # ══════════════════════════════════════════════════════════════════════════
     #  ACTIONS
     # ══════════════════════════════════════════════════════════════════════════
+    def _field_error(self, entry, msg=""):
+        T = self.T
+        lbl = getattr(entry, "_err_label", None)
+        if msg:
+            entry.config(highlightbackground=T["DANGER"], highlightcolor=T["DANGER"])
+            if lbl:
+                lbl.config(text=msg)
+        else:
+            entry.config(highlightbackground=T["BORDER"], highlightcolor=T["ACCENT"])
+            if lbl:
+                lbl.config(text="")
+
+    def _get_real_value(self, entry):
+        """Return entry value, ignoring placeholder text."""
+        val = entry.get().strip()
+        if getattr(entry, "_has_placeholder", False) or val == entry._placeholder:
+            return ""
+        return val
+
     def add(self):
-        name  = self.name_entry.get().strip()
-        watts = self.watts_entry.get().strip()
-        hours = self.hours_entry.get().strip()
-        if not name or not watts or not hours:
-            messagebox.showerror("Missing Fields", "Please fill in all three fields.")
+        name  = self._get_real_value(self.name_entry)
+        watts = self._get_real_value(self.watts_entry)
+        hours = self._get_real_value(self.hours_entry)
+
+        # Clear previous errors
+        for e in (self.name_entry, self.watts_entry, self.hours_entry):
+            self._field_error(e)
+
+        ok = True
+        if not name:
+            self._field_error(self.name_entry, "Required")
+            ok = False
+
+        watts_f = None
+        hours_f = None
+
+        if not watts:
+            self._field_error(self.watts_entry, "Required")
+            ok = False
+        else:
+            try:
+                watts_f = float(watts)
+                if watts_f <= 0:
+                    self._field_error(self.watts_entry, "Must be > 0")
+                    ok = False
+                elif watts_f > 15000:
+                    self._field_error(self.watts_entry, "Unrealistic (>15 000 W)")
+                    ok = False
+            except ValueError:
+                self._field_error(self.watts_entry, "Must be a number")
+                ok = False
+
+        if not hours:
+            self._field_error(self.hours_entry, "Required")
+            ok = False
+        else:
+            try:
+                hours_f = float(hours)
+                unit = self.time_unit.get()
+                if unit == "Minutes":
+                    hours_f = hours_f / 60
+                if hours_f <= 0:
+                    self._field_error(self.hours_entry, "Must be > 0")
+                    ok = False
+                elif hours_f > 24:
+                    self._field_error(self.hours_entry, "Exceeds 24 h/day")
+                    ok = False
+            except ValueError:
+                self._field_error(self.hours_entry, "Must be a number")
+                ok = False
+
+        if not ok:
             return
-        try:
-            watts_f = float(watts)
-            hours_f = float(hours)
-            unit    = self.time_unit.get()
 
-            # Convert minutes to hours for internal storage
-            if unit == "Minutes":
-                hours_f = hours_f / 60
+        # Duplicate check
+        existing = get_all()
+        if name in existing:
+            self._field_error(self.name_entry, f"'{name}' already exists")
+            return
 
-            add_appliance(name, watts_f, hours_f)
-            for e in (self.name_entry, self.watts_entry, self.hours_entry):
-                e.delete(0, tk.END)
-            self.time_unit.set("Hours")
-            self._set_status(False)
-            self._refresh_output_appliances()
-        except ValueError:
-            messagebox.showerror("Invalid Input", "Watts and Usage must be numbers.")
+        add_appliance(name, watts_f, hours_f)
+
+        for e in (self.name_entry, self.watts_entry, self.hours_entry):
+            e.delete(0, tk.END)
+            # Restore placeholders
+            if e._placeholder:
+                e.insert(0, e._placeholder)
+                e.config(fg=self.T["MUTED"])
+                e._has_placeholder = True
+            self._field_error(e)
+
+        self.time_unit.set("Hours")
+        self._set_status(False)
+        self._refresh_output_appliances()
+        self._save_session()
 
     def remove(self):
         name = self.remove_var.get().strip()
         if not name or name == "(none)":
-            messagebox.showerror("No Selection", "Please select an appliance to remove.")
+            Toast(self.root, "Please select an appliance to remove.", "warning")
             return
         if not messagebox.askyesno("Confirm Remove", f"Remove '{name}' from the list?"):
             return
         remove_appliance(name)
         self._refresh_output_appliances()
         self._set_status(False)
+        self._save_session()
 
     def report(self):
         data = get_all()
         if not data:
-            messagebox.showinfo("No Data", "Add at least one appliance first.")
+            Toast(self.root, "Add at least one appliance first.", "warning")
             return
 
         results = compute_all(data)
@@ -933,12 +1342,13 @@ class KiloWatchApp:
 
         self._lock()
         self._set_status(True)
+        self._chart_data = ranked
+        self._redraw_chart()
 
     # ── Compare ───────────────────────────────────────────────────────────────
     def compare_reports(self):
         if len(self.report_history) < 2:
-            messagebox.showinfo("Not Enough Reports",
-                "Generate at least two reports before comparing.")
+            Toast(self.root, "Generate at least two reports before comparing.", "warning")
             return
 
         def resolve(var):
@@ -959,12 +1369,10 @@ class KiloWatchApp:
         idx_b = resolve(self.cmp_b_var)
 
         if idx_a is None or idx_b is None:
-            messagebox.showinfo("Select Reports",
-                "Please select both Report A and Report B from the drop-downs.")
+            Toast(self.root, "Please select both Report A and Report B.", "warning")
             return
         if idx_a == idx_b:
-            messagebox.showinfo("Same Report",
-                "Please select two different reports to compare.")
+            Toast(self.root, "Please select two different reports to compare.", "warning")
             return
 
         rpt_a  = self.report_history[idx_a]
@@ -1086,11 +1494,73 @@ class KiloWatchApp:
         return (f"{name} usage rose {pct:.0f}% — review daily runtime "
                 f"(currently {format_kwh(kwh)}) and reduce where possible.")
 
+   
+    def _export_report(self, fmt):
+        if not self.report_history:
+            Toast(self.root, "Generate at least one report first.", "warning")
+            return
+        rpt = self.report_history[-1]
+        ranked = rpt["ranked"]
+        label  = rpt.get("label", rpt["timestamp"])
+
+        if fmt == "txt":
+            path = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[("Text files", "*.txt")],
+                initialfile=f"KiloWatch_Report.txt",
+                title="Export Report as TXT"
+            )
+            if not path:
+                return
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(f"KiloWatch Energy Report\n")
+                f.write(f"Report: {label}\n")
+                f.write("=" * 48 + "\n\n")
+                for i, (name, kwh) in enumerate(ranked, 1):
+                    f.write(f"{i}. {name}\n")
+                    f.write(f"   {kwh:.4f} kWh/day  |  {kwh * 30:.4f} kWh/month\n\n")
+                total = sum(k for _, k in ranked)
+                f.write("=" * 48 + "\n")
+                f.write(f"Daily Total  : {total:.4f} kWh/day\n")
+                f.write(f"Monthly Est. : {total * 30:.4f} kWh/month\n")
+            Toast(self.root, "Report exported as TXT!", "success")
+
+        elif fmt == "csv":
+            path = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv")],
+                initialfile=f"KiloWatch_Report.csv",
+                title="Export Report as CSV"
+            )
+            if not path:
+                return
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Rank", "Appliance", "kWh/day", "kWh/month"])
+                for i, (name, kwh) in enumerate(ranked, 1):
+                    writer.writerow([i, name, f"{kwh:.4f}", f"{kwh * 30:.4f}"])
+                total = sum(k for _, k in ranked)
+                writer.writerow([])
+                writer.writerow(["", "TOTAL", f"{total:.4f}", f"{total * 30:.4f}"])
+            Toast(self.root, "Report exported as CSV!", "success")
+
+    def _copy_to_clipboard(self):
+        content = self.output.get("1.0", tk.END).strip()
+        if not content or content.startswith("Add your appliances"):
+            Toast(self.root, "Generate a report first.", "warning")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(content)
+        self.root.update()
+        Toast(self.root, "Report copied to clipboard!", "success")
+
     def clear_output(self):
         self._unlock()
         self.output.delete("1.0", tk.END)
         self._write_placeholder()
         self._set_status(False)
+        self._chart_data = []
+        self._redraw_chart()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
