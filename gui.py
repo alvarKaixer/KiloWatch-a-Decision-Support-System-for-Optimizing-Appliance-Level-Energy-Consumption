@@ -253,6 +253,11 @@ class KiloWatchApp:
 
         self.root.minsize(900, 600)
         self.report_history = []
+        self._last_ranked = []
+        self._goal_kwh = tk.DoubleVar(value=0.0)
+        self._goal_bill = tk.DoubleVar(value=0.0)
+        self._goal_mode = "kwh"  # "kwh" or "bill"
+        self._load_session()
         self._load_session()
         self._build_fonts()
         self._show_homescreen()
@@ -623,6 +628,18 @@ class KiloWatchApp:
                   T["BTN_REMOVE"], T["BTN_REMOVE_FG"],
                   self.remove).grid(row=0, column=1, sticky="ew", padx=(8, 0))
 
+        remove_row.columnconfigure(2, weight=1)
+        tk.Button(
+            remove_row, text="All", width=5,
+            font=("Segoe UI", 10, "bold"),
+            bg=T["BTN_REMOVE"], fg=T["BTN_REMOVE_FG"],
+            activebackground=_darken(T["BTN_REMOVE"], 15),
+            activeforeground=T["BTN_REMOVE_FG"],
+            relief="flat", bd=0, cursor="hand2",
+            padx=12, pady=8, command=self._remove_all_appliances
+        ).grid(row=0, column=2, padx=(8, 0))
+        remove_row.columnconfigure(2, weight=0)
+
     # ── Action Buttons ────────────────────────────────────────────────────────
     def _build_action_buttons(self, parent, grid_col=0, grid_row=1):
         T = self.T
@@ -647,6 +664,14 @@ class KiloWatchApp:
         clr_btn.pack(fill="x", padx=10, pady=(0, 4))
         Tooltip(clr_btn, "Clear the output panel")
 
+        whatif_btn = self._btn(outer, "💡  What If",
+                  T["BTN_CMP"], T["BTN_CMP_FG"],
+                  self._open_whatif_window)
+        whatif_btn.pack(fill="x", padx=10, pady=(0, 4))
+        Tooltip(whatif_btn, "Simulate reducing an appliance's daily hours")
+
+        
+
         # More ▾ dropdown
         more_btn = tk.Menubutton(
             outer, text="⋯  More ▾",
@@ -669,6 +694,8 @@ class KiloWatchApp:
         more_btn["menu"] = more_menu
         more_menu.add_command(label="📋  Copy to Clipboard",
                               command=self._copy_to_clipboard)
+        more_menu.add_command(label="🎯  Goal Tracker",
+                              command=self._open_goal_tracker)
         more_menu.add_separator()
         more_menu.add_command(label="💾  Export as .TXT",
                               command=lambda: self._export_report("txt"))
@@ -784,6 +811,8 @@ class KiloWatchApp:
         btn_row_hist.columnconfigure(0, weight=1)
         btn_row_hist.columnconfigure(1, weight=1)
 
+        btn_row_hist.columnconfigure(2, weight=1)
+
         ren_btn = self._btn(btn_row_hist, "✎  Rename",
                   T["BTN_HIST"], T["BTN_HIST_FG"],
                   self._rename_history_entry)
@@ -793,8 +822,21 @@ class KiloWatchApp:
         del_btn = self._btn(btn_row_hist, "🗑  Delete",
                   T["BTN_REMOVE"], T["BTN_REMOVE_FG"],
                   self._delete_history_entry)
-        del_btn.grid(row=0, column=1, sticky="ew")
+        del_btn.grid(row=0, column=1, sticky="ew", padx=(0, 4))
         Tooltip(del_btn, "Delete the selected report")
+
+        del_all_btn = tk.Button(
+            btn_row_hist, text="🗑 All", width=5,
+            font=("Segoe UI", 10, "bold"),
+            bg=T["BTN_REMOVE"], fg=T["BTN_REMOVE_FG"],
+            activebackground=_darken(T["BTN_REMOVE"], 15),
+            activeforeground=T["BTN_REMOVE_FG"],
+            relief="flat", bd=0, cursor="hand2",
+            padx=12, pady=8, command=self._delete_all_history
+        )
+        del_all_btn.grid(row=0, column=2, padx=(4, 0))
+        btn_row_hist.columnconfigure(2, weight=0)
+        Tooltip(del_all_btn, "Delete all reports from history")
 
         sel_frame = tk.Frame(panel, bg=T["CARD"])
         sel_frame.grid(row=3, column=0, sticky="ew", padx=12)
@@ -1157,6 +1199,18 @@ class KiloWatchApp:
         self.hist_listbox.selection_set(idx)
         self._refresh_cmp_menus()
 
+    def _delete_all_history(self):
+        if not self.report_history:
+            Toast(self.root, "No reports in history to delete.", "warning")
+            return
+        if not messagebox.askyesno("Delete All", "Delete all reports from history? This cannot be undone."):
+            return
+        self.report_history.clear()
+        self.hist_listbox.delete(0, tk.END)
+        self._refresh_cmp_menus()
+        self._save_session()
+        Toast(self.root, "All reports deleted.", "success")
+
     def _delete_history_entry(self):
         sel = self.hist_listbox.curselection()
         if not sel:
@@ -1282,6 +1336,21 @@ class KiloWatchApp:
         self._refresh_output_appliances()
         self._save_session()
 
+    def _remove_all_appliances(self):
+        data = get_all()
+        if not data:
+            Toast(self.root, "No appliances to remove.", "warning")
+            return
+        if not messagebox.askyesno("Remove All", "Remove all appliances? This cannot be undone."):
+            return
+        for name in list(data.keys()):
+            remove_appliance(name)
+        self._refresh_output_appliances()
+        self._set_status(False)
+        self._save_session()
+        Toast(self.root, "All appliances removed.", "success")
+
+    
     def remove(self):
         name = self.remove_var.get().strip()
         if not name or name == "(none)":
@@ -1303,6 +1372,8 @@ class KiloWatchApp:
         results = compute_all(data)
         ranked  = rank_appliances(results)
         self._save_report(ranked)
+        self._last_ranked = ranked
+        self._last_ranked = ranked
 
         self._unlock()
         self.output.delete("1.0", tk.END)
@@ -1553,6 +1624,756 @@ class KiloWatchApp:
         self.root.clipboard_append(content)
         self.root.update()
         Toast(self.root, "Report copied to clipboard!", "success")
+
+    # ── What-If Simulator ─────────────────────────────────────────────────────
+    def _show_simulator(self):
+        if not self._last_ranked:
+            Toast(self.root, "Generate a report first, then open the simulator.", "warning")
+            return
+
+        self._sim_active = True
+        T = self.T
+
+        self._unlock()
+        self.output.delete("1.0", tk.END)
+        self._lock()
+
+        # Embed a real frame inside the output card's parent
+        # We'll place the simulator as a sibling widget using the same card
+        if hasattr(self, "_sim_frame") and self._sim_frame.winfo_exists():
+            self._sim_frame.destroy()
+
+        # Find the output card frame (parent of self.output)
+        out_card_parent = self.output.master.master  # txt_frame → out_card
+
+        self._sim_frame = tk.Frame(out_card_parent, bg=T["CARD"])
+        self._sim_frame.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 10))
+        out_card_parent.rowconfigure(1, weight=1)
+
+        # ── Header row ────────────────────────────────────────────────────────
+        hdr = tk.Frame(self._sim_frame, bg=T["CARD"])
+        hdr.pack(fill="x", pady=(4, 8))
+
+        tk.Label(hdr, text="🎛  WHAT-IF SIMULATOR",
+                 font=("Segoe UI", 11, "bold"),
+                 fg=T["ACCENT2"], bg=T["CARD"]).pack(side="left")
+
+        back_btn = self._btn(hdr, "← Back to Report",
+                             T["BTN_CLR"], T["BTN_CLR_FG"],
+                             self._close_simulator)
+        back_btn.pack(side="right")
+
+        tk.Frame(self._sim_frame, height=1, bg=T["BORDER"]).pack(fill="x", pady=(0, 10))
+
+        # ── Appliance picker ──────────────────────────────────────────────────
+        pick_row = tk.Frame(self._sim_frame, bg=T["CARD"])
+        pick_row.pack(fill="x", pady=(0, 8))
+
+        tk.Label(pick_row, text="Appliance:",
+                 font=("Segoe UI", 9, "bold"),
+                 fg=T["MUTED"], bg=T["CARD"]).pack(side="left", padx=(0, 8))
+
+        self._sim_var = tk.StringVar(value=self._last_ranked[0][0])
+        sim_menu = tk.OptionMenu(pick_row, self._sim_var,
+                                 *[name for name, _ in self._last_ranked],
+                                 command=lambda _: self._sim_update())
+        self._style_optionmenu(sim_menu, T["ACCENT"])
+        sim_menu.pack(side="left", fill="x", expand=True)
+
+        # ── Baseline info ─────────────────────────────────────────────────────
+        info_row = tk.Frame(self._sim_frame, bg=T["CARD2"],
+                            highlightthickness=1, highlightbackground=T["BORDER"])
+        info_row.pack(fill="x", pady=(0, 12), ipady=6)
+
+        self._sim_base_label = tk.Label(
+            info_row, text="", font=("Segoe UI", 9),
+            fg=T["MUTED"], bg=T["CARD2"], justify="left")
+        self._sim_base_label.pack(anchor="w", padx=12, pady=(4, 0))
+
+        # ── Slider ────────────────────────────────────────────────────────────
+        slider_hdr = tk.Frame(self._sim_frame, bg=T["CARD"])
+        slider_hdr.pack(fill="x")
+
+        tk.Label(slider_hdr, text="Reduce usage by:",
+                 font=("Segoe UI", 9, "bold"),
+                 fg=T["TEXT"], bg=T["CARD"]).pack(side="left")
+
+        self._sim_pct_label = tk.Label(slider_hdr, text="0%",
+                                        font=("Segoe UI", 11, "bold"),
+                                        fg=T["ACCENT"], bg=T["CARD"])
+        self._sim_pct_label.pack(side="right")
+
+        self._sim_slider = tk.Scale(
+            self._sim_frame,
+            from_=0, to=100,
+            orient="horizontal",
+            showvalue=False,
+            bg=T["CARD"], fg=T["TEXT"],
+            troughcolor=T["CARD2"],
+            activebackground=T["ACCENT"],
+            highlightthickness=0,
+            command=self._sim_on_drag,
+            length=300,
+            sliderlength=18,
+        )
+        self._sim_slider.pack(fill="x", pady=(2, 4))
+
+        tick_row = tk.Frame(self._sim_frame, bg=T["CARD"])
+        tick_row.pack(fill="x", pady=(0, 10))
+        for lbl in ("0%", "25%", "50%", "75%", "100%"):
+            tk.Label(tick_row, text=lbl, font=("Segoe UI", 7),
+                     fg=T["MUTED"], bg=T["CARD"]).pack(side="left", expand=True)
+
+        tk.Frame(self._sim_frame, height=1, bg=T["BORDER"]).pack(fill="x", pady=(0, 10))
+
+        # ── Results grid ──────────────────────────────────────────────────────
+        results_frame = tk.Frame(self._sim_frame, bg=T["CARD"])
+        results_frame.pack(fill="x")
+        results_frame.columnconfigure(0, weight=1)
+        results_frame.columnconfigure(1, weight=1)
+        results_frame.columnconfigure(2, weight=1)
+
+        def _stat_col(parent, col, title, color):
+            f = tk.Frame(parent, bg=T["CARD2"],
+                         highlightthickness=1, highlightbackground=T["BORDER"])
+            f.grid(row=0, column=col, sticky="ew",
+                   padx=(0 if col == 0 else 6, 0), ipady=10)
+            tk.Label(f, text=title, font=("Segoe UI", 7, "bold"),
+                     fg=T["MUTED"], bg=T["CARD2"]).pack(pady=(8, 2))
+            val = tk.Label(f, text="—", font=("Segoe UI", 13, "bold"),
+                           fg=color, bg=T["CARD2"])
+            val.pack()
+            sub = tk.Label(f, text="", font=("Segoe UI", 8),
+                           fg=T["MUTED"], bg=T["CARD2"])
+            sub.pack(pady=(0, 6))
+            return val, sub
+
+        self._sim_bill_val,  self._sim_bill_sub  = _stat_col(results_frame, 0, "EST. BILL SAVED",   T["SUCCESS"])
+        self._sim_kwh_val,   self._sim_kwh_sub   = _stat_col(results_frame, 1, "kWh SAVED",         T["ACCENT"])
+        self._sim_pct_val,   self._sim_pct_sub   = _stat_col(results_frame, 2, "TOTAL REDUCTION",   T["ACCENT3"])
+
+        tk.Frame(self._sim_frame, height=1, bg=T["BORDER"]).pack(fill="x", pady=(12, 6))
+
+        # ── New bill summary ──────────────────────────────────────────────────
+        self._sim_summary = tk.Label(
+            self._sim_frame, text="",
+            font=("Segoe UI", 9), fg=T["TEXT"],
+            bg=T["CARD"], justify="left", wraplength=380)
+        self._sim_summary.pack(anchor="w", padx=4)
+
+        # Trigger initial render
+        self._sim_update()
+
+    def _sim_on_drag(self, val):
+        pct = int(float(val))
+        self._sim_pct_label.config(text=f"{pct}%")
+        self._sim_update()
+
+    def _sim_update(self):
+        if not hasattr(self, "_sim_slider"):
+            return
+
+        T        = self.T
+        name     = self._sim_var.get()
+        pct      = self._sim_slider.get()
+        ranked   = dict(self._last_ranked)
+
+        if name not in ranked:
+            return
+
+        # Rate from entry
+        try:
+            rate = float(self.rate_entry.get().strip())
+            if rate <= 0:
+                rate = None
+        except (ValueError, AttributeError):
+            rate = None
+
+        orig_kwh_day   = ranked[name]
+        saved_kwh_day  = orig_kwh_day * (pct / 100)
+        new_kwh_day    = orig_kwh_day - saved_kwh_day
+
+        saved_kwh_mon  = saved_kwh_day * 30
+        new_kwh_day_total  = sum(
+            (kwh - kwh * (pct / 100) if n == name else kwh)
+            for n, kwh in self._last_ranked
+        )
+        total_orig_day = sum(kwh for _, kwh in self._last_ranked)
+        total_reduction_pct = ((total_orig_day - new_kwh_day_total) / total_orig_day * 100) if total_orig_day else 0
+
+        # Baseline label
+        orig_hours_equiv = orig_kwh_day / (ranked[name] / orig_kwh_day) if orig_kwh_day else 0
+        self._sim_base_label.config(
+            text=f"  {name}  —  baseline: {orig_kwh_day:.4f} kWh/day  |  {orig_kwh_day * 30:.3f} kWh/month"
+        )
+
+        # kWh card
+        self._sim_kwh_val.config(text=f"{saved_kwh_day:.4f}")
+        self._sim_kwh_sub.config(text=f"kWh/day  |  {saved_kwh_mon:.3f}/month")
+
+        # % reduction card
+        self._sim_pct_val.config(text=f"{total_reduction_pct:.1f}%")
+        self._sim_pct_sub.config(text="of total household usage")
+
+        # Bill card
+        if rate:
+            bill_saved = saved_kwh_mon * rate
+            new_total_bill = new_kwh_day_total * 30 * rate
+            orig_total_bill = total_orig_day * 30 * rate
+            self._sim_bill_val.config(text=f"₱{bill_saved:,.2f}")
+            self._sim_bill_sub.config(text="saved per month")
+            self._sim_summary.config(
+                text=(
+                    f"If you reduce {name} by {pct}%:\n"
+                    f"  • This appliance: {format_kwh(new_kwh_day, 'kWh/day')}  (was {format_kwh(orig_kwh_day, 'kWh/day')})\n"
+                    f"  • New household total: {format_kwh(new_kwh_day_total, 'kWh/day')}  |  "
+                    f"{format_kwh(new_kwh_day_total * 30, 'kWh/month')}\n"
+                    f"  • Est. monthly bill: ₱{new_total_bill:,.2f}  (was ₱{orig_total_bill:,.2f})  →  saving ₱{bill_saved:,.2f}"
+                )
+            )
+        else:
+            self._sim_bill_val.config(text="N/A")
+            self._sim_bill_sub.config(text="enter ₱/kWh rate")
+            self._sim_summary.config(
+                text=(
+                    f"If you reduce {name} by {pct}%:\n"
+                    f"  • This appliance: {format_kwh(new_kwh_day, 'kWh/day')}  (was {format_kwh(orig_kwh_day, 'kWh/day')})\n"
+                    f"  • New household total: {format_kwh(new_kwh_day_total, 'kWh/day')}  |  "
+                    f"{format_kwh(new_kwh_day_total * 30, 'kWh/month')}\n"
+                    f"  • Enter a ₱/kWh rate above to see bill savings."
+                )
+            )
+
+    def _close_simulator(self):
+        self._sim_active = False
+        if hasattr(self, "_sim_frame") and self._sim_frame.winfo_exists():
+            self._sim_frame.destroy()
+        # Restore last report or placeholder
+        if self._last_ranked:
+            self._unlock()
+            self.output.delete("1.0", tk.END)
+            self.output.insert(tk.END, "⚡  ENERGY REPORT\n", "header")
+            self.output.insert(tk.END, "─" * 48 + "\n", "divider")
+            ranked = self._last_ranked
+            for i, (name, kwh) in enumerate(ranked, 1):
+                medal = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"  {i}."
+                monthly_kwh = kwh * 30
+                self.output.insert(tk.END, f"\n{medal}  {name}\n", "name")
+                self.output.insert(tk.END, f"     {format_kwh(kwh, 'kWh/day')}  |  {format_kwh(monthly_kwh, 'kWh/month')}\n", "kwh")
+                self.output.insert(tk.END, f"     ↳ {generate_recommendation(name, monthly_kwh)}\n", "rec")
+            self.output.insert(tk.END, "\n" + "─" * 48 + "\n", "divider")
+            total = sum(kwh for _, kwh in ranked)
+            self.output.insert(tk.END, f"    Daily Total   : {format_kwh(total, 'kWh/day')}\n", "section")
+            self.output.insert(tk.END, f"    Monthly Est.  : {format_kwh(total * 30, 'kWh/month')}\n", "section")
+            self._lock()
+        else:
+            self._unlock()
+            self.output.delete("1.0", tk.END)
+            self._write_placeholder()
+            self._lock()
+# ── What If Window ────────────────────────────────────────────────────────
+    def _open_whatif_window(self):
+        if not self._last_ranked:
+            Toast(self.root, "Generate a report first, then open What If.", "warning")
+            return
+
+        T = self.T
+
+        # Prevent duplicate windows
+        if hasattr(self, "_whatif_win") and self._whatif_win.winfo_exists():
+            self._whatif_win.lift()
+            return
+
+        win = tk.Toplevel(self.root)
+        self._whatif_win = win
+        win.title("💡 What If — KiloWatch")
+        win.resizable(True, True)
+        win.configure(bg=T["BG"])
+        win.attributes("-topmost", True)
+
+        # Center on screen
+        win.update_idletasks()
+        W, H = 560, 520
+        sx = self.root.winfo_screenwidth()
+        sy = self.root.winfo_screenheight()
+        win.geometry(f"{W}x{H}+{(sx - W)//2}+{(sy - H)//2}")
+        win.minsize(480, 420)
+
+        # ── Header ────────────────────────────────────────────────────────────
+        hdr = tk.Frame(win, bg=T["ACCENT2"], pady=0)
+        hdr.pack(fill="x")
+        tk.Frame(win, height=2, bg=T["ACCENT3"]).pack(fill="x")
+
+        tk.Label(hdr, text="💡  What If…",
+                 font=("Segoe UI", 14, "bold"),
+                 fg="#ffffff", bg=T["ACCENT2"],
+                 pady=12, padx=20).pack(side="left")
+        tk.Label(hdr, text="Simulate changing an appliance's daily hours",
+                 font=("Segoe UI", 8),
+                 fg="#a8c4e0", bg=T["ACCENT2"],
+                 padx=20).pack(side="left", anchor="s", pady=(0, 13))
+
+        body = tk.Frame(win, bg=T["BG"], padx=20, pady=16)
+        body.pack(fill="both", expand=True)
+
+        # ── Appliance picker ──────────────────────────────────────────────────
+        tk.Label(body, text="APPLIANCE", font=("Segoe UI", 7, "bold"),
+                 fg=T["MUTED"], bg=T["BG"]).pack(anchor="w")
+
+        self._wi_var = tk.StringVar(value=self._last_ranked[0][0])
+        pick_frame = tk.Frame(body, bg=T["BG"])
+        pick_frame.pack(fill="x", pady=(2, 14))
+
+        wi_menu = tk.OptionMenu(pick_frame, self._wi_var,
+                                *[name for name, _ in self._last_ranked],
+                                command=lambda _: self._wi_on_appliance_change())
+        self._style_optionmenu(wi_menu, T["ACCENT"])
+        wi_menu.pack(fill="x", ipady=4)
+
+        # ── Baseline info bar ─────────────────────────────────────────────────
+        info_card = tk.Frame(body, bg=T["CARD"],
+                             highlightthickness=1,
+                             highlightbackground=T["BORDER"])
+        info_card.pack(fill="x", pady=(0, 14))
+
+        self._wi_info = tk.Label(
+            info_card, text="",
+            font=("Segoe UI", 9), fg=T["MUTED"],
+            bg=T["CARD"], justify="left", padx=14, pady=8)
+        self._wi_info.pack(anchor="w")
+
+        # ── Slider ────────────────────────────────────────────────────────────
+        slider_hdr = tk.Frame(body, bg=T["BG"])
+        slider_hdr.pack(fill="x")
+
+        tk.Label(slider_hdr, text="HOURS PER DAY",
+                 font=("Segoe UI", 7, "bold"),
+                 fg=T["MUTED"], bg=T["BG"]).pack(side="left")
+
+        self._wi_hr_label = tk.Label(slider_hdr, text="0 h/day",
+                                     font=("Segoe UI", 12, "bold"),
+                                     fg=T["ACCENT"], bg=T["BG"])
+        self._wi_hr_label.pack(side="right")
+
+        self._wi_slider = tk.Scale(
+            body,
+            from_=0.5, to=24,
+            resolution=0.5,
+            orient="horizontal",
+            showvalue=False,
+            bg=T["BG"], fg=T["TEXT"],
+            troughcolor=T["CARD2"],
+            activebackground=T["ACCENT"],
+            highlightthickness=0,
+            command=self._wi_on_drag,
+            length=440,
+            sliderlength=20,
+        )
+        self._wi_slider.pack(fill="x", pady=(4, 2))
+
+        # Min / max tick labels
+        tick_row = tk.Frame(body, bg=T["BG"])
+        tick_row.pack(fill="x", pady=(0, 14))
+        tk.Label(tick_row, text="0.5 h", font=("Segoe UI", 7),
+                 fg=T["MUTED"], bg=T["BG"]).pack(side="left")
+        tk.Label(tick_row, text="Max", font=("Segoe UI", 7),
+                 fg=T["MUTED"], bg=T["BG"]).pack(side="right")
+
+        tk.Frame(body, height=1, bg=T["BORDER"]).pack(fill="x", pady=(0, 14))
+
+        # ── Results row ───────────────────────────────────────────────────────
+        res = tk.Frame(body, bg=T["BG"])
+        res.pack(fill="x", pady=(0, 14))
+        res.columnconfigure(0, weight=1)
+        res.columnconfigure(1, weight=1)
+        res.columnconfigure(2, weight=1)
+
+        def _stat(parent, col, title, color):
+            f = tk.Frame(parent, bg=T["CARD"],
+                         highlightthickness=1,
+                         highlightbackground=T["BORDER"])
+            f.grid(row=0, column=col, sticky="ew",
+                   padx=(0 if col == 0 else 8, 0), ipady=8)
+            tk.Label(f, text=title, font=("Segoe UI", 7, "bold"),
+                     fg=T["MUTED"], bg=T["CARD"]).pack(pady=(8, 2))
+            val = tk.Label(f, text="—", font=("Segoe UI", 12, "bold"),
+                           fg=color, bg=T["CARD"])
+            val.pack()
+            sub = tk.Label(f, text="", font=("Segoe UI", 8),
+                           fg=T["MUTED"], bg=T["CARD"])
+            sub.pack(pady=(0, 6))
+            return val, sub
+
+        self._wi_kwh_val, self._wi_kwh_sub   = _stat(res, 0, "kWh SAVED",       T["ACCENT"])
+        self._wi_bill_val, self._wi_bill_sub  = _stat(res, 1, "BILL SAVED",      T["SUCCESS"])
+        self._wi_new_val, self._wi_new_sub    = _stat(res, 2, "NEW DAILY TOTAL", T["ACCENT3"])
+
+        # ── Summary line ──────────────────────────────────────────────────────
+        self._wi_summary = tk.Label(
+            body, text="", font=("Segoe UI", 9),
+            fg=T["TEXT"], bg=T["BG"],
+            justify="left", wraplength=440)
+        self._wi_summary.pack(anchor="w")
+
+        # Trigger first render with current appliance's actual hours
+        self._wi_on_appliance_change()
+
+    def _wi_on_appliance_change(self):
+        """Called when user picks a different appliance — resets slider to current hours."""
+        name = self._wi_var.get()
+        data = get_all()
+        info = data.get(name, {})
+        current_hours = info.get("hours", 1.0)
+        current_hours = max(0.5, min(24.0, round(current_hours * 2) / 2))  # snap to 0.5 grid
+
+        # Update baseline info
+        ranked_dict = dict(self._last_ranked)
+        kwh_day = ranked_dict.get(name, 0)
+        self._wi_info.config(
+            text=f"Current: {current_hours} h/day  ·  "
+                 f"{kwh_day:.4f} kWh/day  ·  {kwh_day * 30:.3f} kWh/month"
+        )
+
+        # Reset slider to their actual current hours
+        self._wi_slider.config(to=max(current_hours, 0.5))
+        self._wi_slider.set(current_hours)
+        self._wi_hr_label.config(text=f"{current_hours} h/day")
+        self._wi_update(current_hours)
+
+    def _wi_on_drag(self, val):
+        hrs = float(val)
+        self._wi_hr_label.config(text=f"{hrs:.1f} h/day")
+        self._wi_update(hrs)
+
+    def _wi_update(self, new_hours):
+        T           = self.T
+        name        = self._wi_var.get()
+        data        = get_all()
+        info        = data.get(name, {})
+        watts       = info.get("watts", 0)
+        orig_hours  = info.get("hours", 1.0)
+        ranked_dict = dict(self._last_ranked)
+
+        orig_kwh_day = ranked_dict.get(name, 0)
+        new_kwh_day  = (watts * new_hours) / 1000
+        saved_kwh_day = orig_kwh_day - new_kwh_day
+        saved_kwh_mon = saved_kwh_day * 30
+
+        total_orig  = sum(kwh for _, kwh in self._last_ranked)
+        total_new   = total_orig - orig_kwh_day + new_kwh_day
+
+        # Rate
+        try:
+            rate = float(self.rate_entry.get().strip())
+            rate = rate if rate > 0 else None
+        except (ValueError, AttributeError):
+            rate = None
+
+        # kWh card
+        if saved_kwh_day >= 0:
+            self._wi_kwh_val.config(text=f"{saved_kwh_day:.4f}",
+                                    fg=T["SUCCESS"] if saved_kwh_day > 0 else T["MUTED"])
+            self._wi_kwh_sub.config(text=f"kWh/day  ·  {saved_kwh_mon:.3f}/month")
+        else:
+            # new_hours > orig → using MORE
+            self._wi_kwh_val.config(text=f"+{abs(saved_kwh_day):.4f}",
+                                    fg=T["DANGER"])
+            self._wi_kwh_sub.config(text=f"kWh/day extra  ·  {abs(saved_kwh_mon):.3f}/month")
+
+        # New daily total card
+        self._wi_new_val.config(text=f"{total_new:.4f}")
+        self._wi_new_sub.config(text="kWh/day total")
+
+        # Bill card
+        if rate:
+            bill_saved = saved_kwh_mon * rate
+            new_bill   = total_new * 30 * rate
+            orig_bill  = total_orig * 30 * rate
+            if bill_saved >= 0:
+                self._wi_bill_val.config(
+                    text=f"₱{bill_saved:,.2f}",
+                    fg=T["SUCCESS"])
+                self._wi_bill_sub.config(text="saved per month")
+            else:
+                self._wi_bill_val.config(
+                    text=f"−₱{abs(bill_saved):,.2f}",
+                    fg=T["DANGER"])
+                self._wi_bill_sub.config(text="extra per month")
+
+            hrs_diff = orig_hours - new_hours
+            dir_word = "Reducing" if hrs_diff > 0 else "Increasing"
+            hrs_abs  = abs(hrs_diff)
+            self._wi_summary.config(
+                text=(
+                    f"{dir_word} {name} by {hrs_abs:.1f} h/day:\n"
+                    f"  New usage: {new_kwh_day:.4f} kWh/day  "
+                    f"(was {orig_kwh_day:.4f})  ·  "
+                    f"New bill: ₱{new_bill:,.2f}/month  (was ₱{orig_bill:,.2f})"
+                )
+            )
+        else:
+            self._wi_bill_val.config(text="N/A", fg=T["MUTED"])
+            self._wi_bill_sub.config(text="enter ₱/kWh rate")
+            hrs_diff = orig_hours - new_hours
+            dir_word = "Reducing" if hrs_diff >= 0 else "Increasing"
+            hrs_abs  = abs(hrs_diff)
+            self._wi_summary.config(
+                text=(
+                    f"{dir_word} {name} by {hrs_abs:.1f} h/day:\n"
+                    f"  New usage: {new_kwh_day:.4f} kWh/day  "
+                    f"(was {orig_kwh_day:.4f})  ·  "
+                    f"Enter a ₱/kWh rate to see bill savings."
+                )
+            )
+
+
+    def _open_goal_tracker(self):
+        T = self.T
+        if hasattr(self, "_goal_win") and self._goal_win.winfo_exists():
+            self._goal_win.lift()
+            return
+
+        win = tk.Toplevel(self.root)
+        self._goal_win = win
+        win.title("🎯 Goal Tracker — KiloWatch")
+        win.resizable(True, True)
+        win.configure(bg=T["BG"])
+        win.attributes("-topmost", True)
+
+        W, H = 420, 540
+        sx = self.root.winfo_screenwidth()
+        sy = self.root.winfo_screenheight()
+        win.geometry(f"{W}x{H}+{(sx - W)//2}+{(sy - H)//2}")
+        win.minsize(380, 480)
+
+        # ── Header ────────────────────────────────────────────────────────────
+        hdr = tk.Frame(win, bg=T["ACCENT2"])
+        hdr.pack(fill="x")
+        tk.Frame(win, height=2, bg=T["ACCENT3"]).pack(fill="x")
+        tk.Label(hdr, text="🎯  Goal Tracker",
+                 font=("Segoe UI", 14, "bold"),
+                 fg="#ffffff", bg=T["ACCENT2"],
+                 pady=12, padx=20).pack(side="left")
+        tk.Label(hdr, text="Set a monthly target and track your progress",
+                 font=("Segoe UI", 8),
+                 fg="#a8c4e0", bg=T["ACCENT2"],
+                 padx=20).pack(side="left", anchor="s", pady=(0, 13))
+
+        body = tk.Frame(win, bg=T["BG"], padx=24, pady=20)
+        body.pack(fill="both", expand=True)
+
+        # ── Mode toggle ───────────────────────────────────────────────────────
+        tk.Label(body, text="TRACK BY", font=("Segoe UI", 7, "bold"),
+                 fg=T["MUTED"], bg=T["BG"]).pack(anchor="w")
+
+        mode_row = tk.Frame(body, bg=T["BG"])
+        mode_row.pack(fill="x", pady=(4, 16))
+
+        self._goal_mode_var = tk.StringVar(value=self._goal_mode)
+
+        def _set_mode(m):
+            self._goal_mode = m
+            self._goal_mode_var.set(m)
+            self._goal_refresh_gauge()
+
+        for val, lbl in (("kwh", "Monthly kWh"), ("bill", "Monthly Bill (₱)")):
+            rb = tk.Radiobutton(
+                mode_row, text=lbl,
+                variable=self._goal_mode_var, value=val,
+                font=("Segoe UI", 10, "bold"),
+                bg=T["BG"], fg=T["TEXT"],
+                selectcolor=T["CARD2"],
+                activebackground=T["BG"],
+                relief="flat", bd=0,
+                command=lambda m=val: _set_mode(m)
+            )
+            rb.pack(side="left", padx=(0, 20))
+
+        # ── Target input ──────────────────────────────────────────────────────
+        tk.Label(body, text="SET TARGET", font=("Segoe UI", 7, "bold"),
+                 fg=T["MUTED"], bg=T["BG"]).pack(anchor="w")
+
+        input_row = tk.Frame(body, bg=T["BG"])
+        input_row.pack(fill="x", pady=(4, 20))
+
+        self._goal_entry = tk.Entry(
+            input_row, font=("Segoe UI", 12),
+            bg=T["CARD"], fg=T["TEXT"],
+            insertbackground=T["ACCENT"],
+            relief="flat", bd=0, width=12,
+            highlightthickness=1,
+            highlightbackground=T["BORDER"],
+            highlightcolor=T["ACCENT"],
+        )
+        self._goal_entry.pack(side="left", ipady=8, padx=(0, 10))
+
+        cur_val = self._goal_kwh.get() if self._goal_mode == "kwh" else self._goal_bill.get()
+        if cur_val > 0:
+            self._goal_entry.insert(0, str(cur_val))
+
+        set_btn = self._btn(input_row, "Set Goal",
+                            T["BTN_ADD"], T["BTN_ADD_FG"],
+                            self._goal_apply)
+        set_btn.pack(side="left")
+
+        # ── Circular gauge canvas ─────────────────────────────────────────────
+        gauge_frame = tk.Frame(body, bg=T["BG"])
+        gauge_frame.pack(pady=(0, 16))
+
+        self._gauge_canvas = tk.Canvas(
+            gauge_frame, width=240, height=240,
+            bg=T["BG"], highlightthickness=0
+        )
+        self._gauge_canvas.pack()
+        self._gauge_canvas.update_idletasks()
+
+        # ── Status text below gauge ───────────────────────────────────────────
+        self._goal_status = tk.Label(
+            body, text="", font=("Segoe UI", 10),
+            fg=T["MUTED"], bg=T["BG"], justify="center"
+        )
+        self._goal_status.pack()
+
+        self._goal_tip = tk.Label(
+            body, text="", font=("Segoe UI", 9, "italic"),
+            fg=T["ACCENT3"], bg=T["BG"],
+            wraplength=360, justify="center"
+        )
+        self._goal_tip.pack(pady=(6, 0))
+
+        self._goal_refresh_gauge()
+
+    def _goal_apply(self):
+        try:
+            val = float(self._goal_entry.get().strip())
+            if val <= 0:
+                Toast(self.root, "Target must be greater than 0.", "warning")
+                return
+        except ValueError:
+            Toast(self.root, "Please enter a valid number.", "error")
+            return
+
+        if self._goal_mode == "kwh":
+            self._goal_kwh.set(val)
+        else:
+            self._goal_bill.set(val)
+
+        self._goal_refresh_gauge()
+        Toast(self.root, "Goal updated!", "success")
+
+    def _goal_get_current(self):
+        """Return (current_kwh_month, current_bill_month) from live appliance data."""
+        data = get_all()
+        if not data:
+            return 0.0, 0.0
+        results = compute_all(data)
+        total_day = sum(v for v in results.values())
+        total_month = total_day * 30
+        try:
+            rate = float(self.rate_entry.get().strip())
+            rate = rate if rate > 0 else 0.0
+        except (ValueError, AttributeError):
+            rate = 0.0
+        return total_month, total_month * rate
+
+    def _goal_refresh_gauge(self):
+        if not hasattr(self, "_gauge_canvas") or not self._gauge_canvas.winfo_exists():
+            return
+
+        T = self.T
+        c = self._gauge_canvas
+        c.update_idletasks()
+        c.delete("all")
+
+        W      = 240
+        H      = 240
+        cx     = 120
+        cy     = 120
+        r_out  = 95
+        r_in   = 63
+        start  = 220
+        total  = 280
+
+        current_kwh, current_bill = self._goal_get_current()
+
+        if self._goal_mode == "kwh":
+            target  = self._goal_kwh.get()
+            current = current_kwh
+            unit    = "kWh"
+            fmt     = f"{current:.2f} / {target:.1f} kWh"
+        else:
+            target  = self._goal_bill.get()
+            current = current_bill
+            unit    = "₱"
+            fmt     = f"₱{current:,.2f} / ₱{target:,.2f}"
+
+        pct = min((current / target) if target > 0 else 0, 1.0)
+
+        # Color based on % used
+        if pct < 0.6:
+            bar_color = T["SUCCESS"]
+        elif pct < 0.85:
+            bar_color = T["ACCENT3"]
+        else:
+            bar_color = T["DANGER"]
+
+        # Background track arc
+        c.create_arc(
+            cx - r_out, cy - r_out, cx + r_out, cy + r_out,
+            start=-(start - total + 360), extent=total,
+            style="arc", outline=T["BORDER"], width=20
+        )
+
+        # Filled arc
+        if pct > 0:
+            sweep = total * pct
+            c.create_arc(
+                cx - r_out, cy - r_out, cx + r_out, cy + r_out,
+                start=-start, extent=sweep,
+                style="arc", outline=bar_color, width=20
+            )
+
+        # Inner circle fill
+        c.create_oval(
+            cx - r_in, cy - r_in, cx + r_in, cy + r_in,
+            fill=T["CARD"], outline=T["BORDER"]
+        )
+
+        # Centre % text
+        pct_text = f"{int(pct * 100)}%"
+        c.create_text(cx, cy - 14, text=pct_text,
+                      font=("Segoe UI", 28, "bold"),
+                      fill=bar_color)
+        c.create_text(cx, cy + 16, text="used",
+                      font=("Segoe UI", 9),
+                      fill=T["MUTED"])
+        c.create_text(cx, cy + 34, text=fmt,
+                      font=("Segoe UI", 8),
+                      fill=T["MUTED"])
+
+        # Status label
+        if target <= 0:
+            status = "Set a target above to begin tracking."
+            tip    = ""
+        elif pct >= 1.0:
+            status = "⚠  You've exceeded your monthly target!"
+            tip    = "Consider reducing high-usage appliances or raising your target."
+        elif pct >= 0.85:
+            status = "⚡  Approaching your limit — use wisely."
+            tip    = "You're close to your goal. Check the What If tool to simulate reductions."
+        elif pct >= 0.6:
+            status = "📊  On track — moderate usage."
+            tip    = "Good progress. Keep an eye on high-ranked appliances."
+        else:
+            status = "✅  Well within your target!"
+            tip    = "Great efficiency! You have plenty of headroom this month."
+
+        self._goal_status.config(text=status, fg=bar_color if target > 0 else T["MUTED"])
+        self._goal_tip.config(text=tip)
+
+        # Schedule live refresh every 2 seconds
+        if self._gauge_canvas.winfo_exists():
+            self._gauge_canvas.after(2000, self._goal_refresh_gauge)
 
     def clear_output(self):
         self._unlock()
