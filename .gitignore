@@ -1,0 +1,17 @@
+# ── User data (generated at runtime) ──
+users.json
+profile_*.json
+kilowatch_data_*.json
+kilowatch_history_*.json
+
+# ── Python cache ──
+__pycache__/
+*.pyc
+*.pyo
+
+# ── VS Code ──
+.vscode/
+
+# ── OS junk ──
+.DS_Store
+Thumbs.db

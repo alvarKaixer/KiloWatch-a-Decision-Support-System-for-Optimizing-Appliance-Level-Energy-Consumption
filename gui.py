@@ -7,6 +7,8 @@ from data_manager import add_appliance, get_all, remove_appliance
 from persistence import save_appliances, load_appliances, save_history, load_history
 from logic import compute_all, rank_appliances
 from utils import format_kwh, generate_recommendation, generate_overall_insight
+from profile_page import ProfilePage, load_profile
+from data_manager import add_appliance, get_all, remove_appliance, clear_all
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -231,11 +233,13 @@ def _lighten(hex_color, amount=20):
 
 
 class KiloWatchApp:
-    def __init__(self, root):
+    def __init__(self, root, username="User", on_logout=None):
         self.root = root
+        self.username = username
+        self.on_logout = on_logout  # callable or None
         self.root.title("KiloWatch — Decision Support System")
 
-        self._mode = "light"
+        self._mode = "dark"
         self._apply_theme()
 
         self.root.configure(bg=self.T["HOME_BG"])
@@ -254,10 +258,6 @@ class KiloWatchApp:
         self.root.minsize(900, 600)
         self.report_history = []
         self._last_ranked = []
-        self._goal_kwh = tk.DoubleVar(value=0.0)
-        self._goal_bill = tk.DoubleVar(value=0.0)
-        self._goal_mode = "kwh"  # "kwh" or "bill"
-        self._load_session()
         self._load_session()
         self._build_fonts()
         self._show_homescreen()
@@ -306,14 +306,15 @@ class KiloWatchApp:
     # ══════════════════════════════════════════════════════════════════════════
     def _load_session(self):
         """Restore appliances and report history from disk."""
-        saved = load_appliances()
+        clear_all()
+        saved = load_appliances(self.username)
         for name, info in saved.items():
             add_appliance(name, info.get("watts", 0), info.get("hours", 0))
-        self.report_history = load_history()
+        self.report_history = load_history(self.username)
 
     def _save_session(self):
-        save_appliances(get_all())
-        save_history(self.report_history)
+        save_appliances(get_all(), self.username)
+        save_history(self.report_history, self.username)
 
     def _show_homescreen(self):
         T = self.T
@@ -393,8 +394,21 @@ class KiloWatchApp:
                      fg=fg_muted, bg=card_bg, justify="center").pack(pady=(4, 12))
 
         # Enter button
+        btn_row = tk.Frame(centre, bg=bg)
+        btn_row.pack()
+
+        tk.Button(
+            btn_row, text="👤  Profile",
+            font=("Segoe UI", 11, "bold"),
+            bg=T["BTN_CLR"], fg=T["BTN_CLR_FG"],
+            activebackground=_lighten(T["BTN_CLR"], 15),
+            activeforeground=T["BTN_CLR_FG"],
+            relief="flat", bd=0, cursor="hand2", padx=20, pady=14,
+            command=lambda u=self.username: ProfilePage(self.root, self.T, self.report_history, lambda: self.rate_entry.get() if hasattr(self, 'rate_entry') else "14.3496", u)
+        ).pack(side="left", padx=(0, 12))
+
         enter_btn = tk.Button(
-            centre, text="  ⚡  Open the System  →",
+            btn_row, text="  ⚡  Open the System  →",
             font=("Segoe UI", 13, "bold"),
             bg=fg_accent, fg=T["HOME_BG"],
             activebackground=_lighten(fg_accent, 20),
@@ -402,7 +416,7 @@ class KiloWatchApp:
             relief="flat", bd=0, cursor="hand2", padx=30, pady=14,
             command=self._launch_system
         )
-        enter_btn.pack()
+        enter_btn.pack(side="left")
         enter_btn.bind("<Enter>", lambda e: enter_btn.config(bg=_lighten(T["ACCENT3"], 20)))
         enter_btn.bind("<Leave>", lambda e: enter_btn.config(bg=fg_accent))
 
@@ -481,6 +495,18 @@ class KiloWatchApp:
         )
         home_btn.pack(side="right", padx=(0, 8))
 
+        # paste this immediately after the home_btn.pack(...) line
+        logout_btn = tk.Button(
+            inner_header, text="⏻  Logout",
+            font=("Segoe UI", 9, "bold"),
+            bg=T["DANGER"], fg="#ffffff",
+            activebackground=_darken(T["DANGER"], 15),
+            activeforeground="#ffffff",
+            relief="flat", bd=0, cursor="hand2", padx=10, pady=4,
+            command=self._logout
+)
+        logout_btn.pack(side="right", padx=(0, 8))
+
         # ── Theme toggle ───────────────────────────────────────────────────────
         mode_icon  = "☀  Light" if self._mode == "dark" else "🌙  Dark"
         self._theme_btn = tk.Button(
@@ -493,6 +519,17 @@ class KiloWatchApp:
             command=self._toggle_theme
         )
         self._theme_btn.pack(side="right", padx=(0, 8))
+
+        profile_btn = tk.Button(
+            inner_header, text="👤  Profile",
+            font=("Segoe UI", 9, "bold"),
+            bg=T["BTN_CLR"], fg=T["BTN_CLR_FG"],
+            activebackground=_lighten(T["BTN_CLR"], 20),
+            activeforeground=T["BTN_CLR_FG"],
+            relief="flat", bd=0, cursor="hand2", padx=10, pady=4,
+            command=lambda u=self.username: ProfilePage(self.root, self.T, self.report_history, lambda: self.rate_entry.get(), u)
+        )
+        profile_btn.pack(side="right", padx=(0, 8))
 
         # ── Body ──────────────────────────────────────────────────────────────
         body = tk.Frame(self.root, bg=T["BG"])
@@ -567,6 +604,14 @@ class KiloWatchApp:
         for widget in self.root.winfo_children():
             widget.destroy()
         self._show_homescreen()
+
+    def _logout(self):
+        if not messagebox.askyesno(
+        "Logout", f"Log out of '{self.username}'?\nUnsaved progress is already auto-saved."
+    ):
+            return
+        self._save_session()
+        self.root.destroy()          # kills mainloop → triggers re-login in main.py
 
     # ── Input Card ────────────────────────────────────────────────────────────
     def _build_input_card(self, parent, grid_col=0):
@@ -694,8 +739,7 @@ class KiloWatchApp:
         more_btn["menu"] = more_menu
         more_menu.add_command(label="📋  Copy to Clipboard",
                               command=self._copy_to_clipboard)
-        more_menu.add_command(label="🎯  Goal Tracker",
-                              command=self._open_goal_tracker)
+        
         more_menu.add_separator()
         more_menu.add_command(label="💾  Export as .TXT",
                               command=lambda: self._export_report("txt"))
@@ -2127,254 +2171,6 @@ class KiloWatchApp:
             )
 
 
-    def _open_goal_tracker(self):
-        T = self.T
-        if hasattr(self, "_goal_win") and self._goal_win.winfo_exists():
-            self._goal_win.lift()
-            return
-
-        win = tk.Toplevel(self.root)
-        self._goal_win = win
-        win.title("🎯 Goal Tracker — KiloWatch")
-        win.resizable(True, True)
-        win.configure(bg=T["BG"])
-        win.attributes("-topmost", True)
-
-        W, H = 420, 540
-        sx = self.root.winfo_screenwidth()
-        sy = self.root.winfo_screenheight()
-        win.geometry(f"{W}x{H}+{(sx - W)//2}+{(sy - H)//2}")
-        win.minsize(380, 480)
-
-        # ── Header ────────────────────────────────────────────────────────────
-        hdr = tk.Frame(win, bg=T["ACCENT2"])
-        hdr.pack(fill="x")
-        tk.Frame(win, height=2, bg=T["ACCENT3"]).pack(fill="x")
-        tk.Label(hdr, text="🎯  Goal Tracker",
-                 font=("Segoe UI", 14, "bold"),
-                 fg="#ffffff", bg=T["ACCENT2"],
-                 pady=12, padx=20).pack(side="left")
-        tk.Label(hdr, text="Set a monthly target and track your progress",
-                 font=("Segoe UI", 8),
-                 fg="#a8c4e0", bg=T["ACCENT2"],
-                 padx=20).pack(side="left", anchor="s", pady=(0, 13))
-
-        body = tk.Frame(win, bg=T["BG"], padx=24, pady=20)
-        body.pack(fill="both", expand=True)
-
-        # ── Mode toggle ───────────────────────────────────────────────────────
-        tk.Label(body, text="TRACK BY", font=("Segoe UI", 7, "bold"),
-                 fg=T["MUTED"], bg=T["BG"]).pack(anchor="w")
-
-        mode_row = tk.Frame(body, bg=T["BG"])
-        mode_row.pack(fill="x", pady=(4, 16))
-
-        self._goal_mode_var = tk.StringVar(value=self._goal_mode)
-
-        def _set_mode(m):
-            self._goal_mode = m
-            self._goal_mode_var.set(m)
-            self._goal_refresh_gauge()
-
-        for val, lbl in (("kwh", "Monthly kWh"), ("bill", "Monthly Bill (₱)")):
-            rb = tk.Radiobutton(
-                mode_row, text=lbl,
-                variable=self._goal_mode_var, value=val,
-                font=("Segoe UI", 10, "bold"),
-                bg=T["BG"], fg=T["TEXT"],
-                selectcolor=T["CARD2"],
-                activebackground=T["BG"],
-                relief="flat", bd=0,
-                command=lambda m=val: _set_mode(m)
-            )
-            rb.pack(side="left", padx=(0, 20))
-
-        # ── Target input ──────────────────────────────────────────────────────
-        tk.Label(body, text="SET TARGET", font=("Segoe UI", 7, "bold"),
-                 fg=T["MUTED"], bg=T["BG"]).pack(anchor="w")
-
-        input_row = tk.Frame(body, bg=T["BG"])
-        input_row.pack(fill="x", pady=(4, 20))
-
-        self._goal_entry = tk.Entry(
-            input_row, font=("Segoe UI", 12),
-            bg=T["CARD"], fg=T["TEXT"],
-            insertbackground=T["ACCENT"],
-            relief="flat", bd=0, width=12,
-            highlightthickness=1,
-            highlightbackground=T["BORDER"],
-            highlightcolor=T["ACCENT"],
-        )
-        self._goal_entry.pack(side="left", ipady=8, padx=(0, 10))
-
-        cur_val = self._goal_kwh.get() if self._goal_mode == "kwh" else self._goal_bill.get()
-        if cur_val > 0:
-            self._goal_entry.insert(0, str(cur_val))
-
-        set_btn = self._btn(input_row, "Set Goal",
-                            T["BTN_ADD"], T["BTN_ADD_FG"],
-                            self._goal_apply)
-        set_btn.pack(side="left")
-
-        # ── Circular gauge canvas ─────────────────────────────────────────────
-        gauge_frame = tk.Frame(body, bg=T["BG"])
-        gauge_frame.pack(pady=(0, 16))
-
-        self._gauge_canvas = tk.Canvas(
-            gauge_frame, width=240, height=240,
-            bg=T["BG"], highlightthickness=0
-        )
-        self._gauge_canvas.pack()
-        self._gauge_canvas.update_idletasks()
-
-        # ── Status text below gauge ───────────────────────────────────────────
-        self._goal_status = tk.Label(
-            body, text="", font=("Segoe UI", 10),
-            fg=T["MUTED"], bg=T["BG"], justify="center"
-        )
-        self._goal_status.pack()
-
-        self._goal_tip = tk.Label(
-            body, text="", font=("Segoe UI", 9, "italic"),
-            fg=T["ACCENT3"], bg=T["BG"],
-            wraplength=360, justify="center"
-        )
-        self._goal_tip.pack(pady=(6, 0))
-
-        self._goal_refresh_gauge()
-
-    def _goal_apply(self):
-        try:
-            val = float(self._goal_entry.get().strip())
-            if val <= 0:
-                Toast(self.root, "Target must be greater than 0.", "warning")
-                return
-        except ValueError:
-            Toast(self.root, "Please enter a valid number.", "error")
-            return
-
-        if self._goal_mode == "kwh":
-            self._goal_kwh.set(val)
-        else:
-            self._goal_bill.set(val)
-
-        self._goal_refresh_gauge()
-        Toast(self.root, "Goal updated!", "success")
-
-    def _goal_get_current(self):
-        """Return (current_kwh_month, current_bill_month) from live appliance data."""
-        data = get_all()
-        if not data:
-            return 0.0, 0.0
-        results = compute_all(data)
-        total_day = sum(v for v in results.values())
-        total_month = total_day * 30
-        try:
-            rate = float(self.rate_entry.get().strip())
-            rate = rate if rate > 0 else 0.0
-        except (ValueError, AttributeError):
-            rate = 0.0
-        return total_month, total_month * rate
-
-    def _goal_refresh_gauge(self):
-        if not hasattr(self, "_gauge_canvas") or not self._gauge_canvas.winfo_exists():
-            return
-
-        T = self.T
-        c = self._gauge_canvas
-        c.update_idletasks()
-        c.delete("all")
-
-        W      = 240
-        H      = 240
-        cx     = 120
-        cy     = 120
-        r_out  = 95
-        r_in   = 63
-        start  = 220
-        total  = 280
-
-        current_kwh, current_bill = self._goal_get_current()
-
-        if self._goal_mode == "kwh":
-            target  = self._goal_kwh.get()
-            current = current_kwh
-            unit    = "kWh"
-            fmt     = f"{current:.2f} / {target:.1f} kWh"
-        else:
-            target  = self._goal_bill.get()
-            current = current_bill
-            unit    = "₱"
-            fmt     = f"₱{current:,.2f} / ₱{target:,.2f}"
-
-        pct = min((current / target) if target > 0 else 0, 1.0)
-
-        # Color based on % used
-        if pct < 0.6:
-            bar_color = T["SUCCESS"]
-        elif pct < 0.85:
-            bar_color = T["ACCENT3"]
-        else:
-            bar_color = T["DANGER"]
-
-        # Background track arc
-        c.create_arc(
-            cx - r_out, cy - r_out, cx + r_out, cy + r_out,
-            start=-(start - total + 360), extent=total,
-            style="arc", outline=T["BORDER"], width=20
-        )
-
-        # Filled arc
-        if pct > 0:
-            sweep = total * pct
-            c.create_arc(
-                cx - r_out, cy - r_out, cx + r_out, cy + r_out,
-                start=-start, extent=sweep,
-                style="arc", outline=bar_color, width=20
-            )
-
-        # Inner circle fill
-        c.create_oval(
-            cx - r_in, cy - r_in, cx + r_in, cy + r_in,
-            fill=T["CARD"], outline=T["BORDER"]
-        )
-
-        # Centre % text
-        pct_text = f"{int(pct * 100)}%"
-        c.create_text(cx, cy - 14, text=pct_text,
-                      font=("Segoe UI", 28, "bold"),
-                      fill=bar_color)
-        c.create_text(cx, cy + 16, text="used",
-                      font=("Segoe UI", 9),
-                      fill=T["MUTED"])
-        c.create_text(cx, cy + 34, text=fmt,
-                      font=("Segoe UI", 8),
-                      fill=T["MUTED"])
-
-        # Status label
-        if target <= 0:
-            status = "Set a target above to begin tracking."
-            tip    = ""
-        elif pct >= 1.0:
-            status = "⚠  You've exceeded your monthly target!"
-            tip    = "Consider reducing high-usage appliances or raising your target."
-        elif pct >= 0.85:
-            status = "⚡  Approaching your limit — use wisely."
-            tip    = "You're close to your goal. Check the What If tool to simulate reductions."
-        elif pct >= 0.6:
-            status = "📊  On track — moderate usage."
-            tip    = "Good progress. Keep an eye on high-ranked appliances."
-        else:
-            status = "✅  Well within your target!"
-            tip    = "Great efficiency! You have plenty of headroom this month."
-
-        self._goal_status.config(text=status, fg=bar_color if target > 0 else T["MUTED"])
-        self._goal_tip.config(text=tip)
-
-        # Schedule live refresh every 2 seconds
-        if self._gauge_canvas.winfo_exists():
-            self._gauge_canvas.after(2000, self._goal_refresh_gauge)
-
     def clear_output(self):
         self._unlock()
         self.output.delete("1.0", tk.END)
@@ -2386,6 +2182,11 @@ class KiloWatchApp:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    root = tk.Tk()
-    app  = KiloWatchApp(root)
-    root.mainloop()
+    from login_window import LoginWindow
+
+    def on_login(username):
+        root = tk.Tk()
+        app = KiloWatchApp(root, username=username)
+        root.mainloop()
+
+    LoginWindow(on_success=on_login)
