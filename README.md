@@ -1,4 +1,4 @@
-#  KiloWatch
+# KiloWatch
 ### A Decision Support System for Optimizing Appliance-Level Energy Consumption
 
 ![Python](https://img.shields.io/badge/Python-3.14-blue?style=flat-square&logo=python)
@@ -9,23 +9,23 @@ KiloWatch is a desktop application that helps households track, analyze, and red
 
 ---
 
-##  Features
+## Features
 
 | Feature | Description |
 |---|---|
-|  **User Accounts** | Register and log in with hashed credentials — each user's data is fully isolated |
-|  **Appliance Tracker** | Add appliances by name, wattage, and daily usage hours (or minutes) |
-|  **Energy Reports** | Instantly ranked breakdown of daily & monthly kWh per appliance |
-|  **Smart Recommendations** | Per-appliance and overall energy-saving tips generated automatically |
-|  **Report Comparison** | Pick any two saved reports and compare consumption changes side-by-side |
-|  **What-If Simulator** | Drag a slider to simulate reducing an appliance's hours and see savings in real time |
-|  **Export** | Save any report as `.TXT` or `.CSV`, or copy it to clipboard |
-|  **Light / Dark Mode** | Full theme switching with high-contrast palettes for both modes |
-|  **Session Persistence** | Appliances and report history are automatically saved and restored per user |
+| **User Accounts** | Register and log in with hashed credentials — each user's data is fully isolated |
+| **Appliance Tracker** | Add appliances by name, wattage, and daily usage hours (or minutes) |
+| **Energy Reports** | Instantly ranked breakdown of daily & monthly kWh per appliance |
+| **Smart Recommendations** | Per-appliance and overall energy-saving tips generated automatically |
+| **Report Comparison** | Pick any two saved reports and compare consumption changes side-by-side |
+| **What-If Simulator** | Drag a slider to simulate reducing an appliance's hours and see savings in real time |
+| **Export** | Save any report as `.TXT` or `.CSV`, or copy it to clipboard |
+| **Light / Dark Mode** | Full theme switching with high-contrast palettes for both modes |
+| **Session Persistence** | Appliances and report history are automatically saved and restored per user |
 
 ---
 
-##  Project Structure
+## Project Structure
 
 ```
 KiloWatch/
@@ -52,7 +52,7 @@ KiloWatch/
 
 ---
 
-##  How It Works
+## How It Works
 
 ### 1. Authentication (`auth.py`, `login_window.py`)
 Users register with a username and password. Passwords are hashed with SHA-256 before being stored in `users.json` — plaintext passwords are never saved. On login, the entered password is hashed and compared. A successful login passes the username through to the main app, where it scopes all data loading and saving.
@@ -69,7 +69,7 @@ kWh/day = (Watts × Hours/day) / 1000
 
 All appliances are then **ranked highest to lowest** by kWh/day so the biggest energy consumers are immediately obvious.
 
-###  Computation Reference
+### Computation Reference
 
 #### Core energy calculations (`logic.py` — `compute_all`)
 
@@ -138,13 +138,18 @@ After generating a report, the What-If window lets users pick any appliance and 
 
 ---
 
-##  Getting Started
+## Getting Started
 
 ### Prerequisites
 - Python 3.8 or higher
 - Tkinter (included with most standard Python installations)
+- [Pillow](https://pypi.org/project/pillow/) — for image rendering in the UI
 
-No third-party packages required — KiloWatch runs entirely on the Python standard library.
+Install it with:
+
+```bash
+pip install Pillow
+```
 
 ### Installation
 
@@ -165,7 +170,7 @@ That's it. No virtual environment or dependency installation needed.
 
 ---
 
-## 🖥 Usage Guide
+## Usage Guide
 
 1. **Launch** the app — you'll land on the login screen.
 2. **Register** a new account or **log in** with existing credentials.
@@ -173,31 +178,31 @@ That's it. No virtual environment or dependency installation needed.
 4. **Add appliances** using the input fields at the top (name, watts, hours/day).
 5. Click ** Generate** to produce a ranked energy report.
 6. Use ** What If** to simulate reducing usage on any appliance.
-7. Generate multiple reports over time, then use **⇄ Compare A vs B** to track changes.
+7. Generate multiple reports over time, then use ** Compare A vs B** to track changes.
 8. Export any report via **More ▾ → Export as .TXT / .CSV**.
-9. Click **⏻ Logout** in the header to return to the login screen.
+9. Click ** Logout** in the header to return to the login screen.
 
 ---
 
-##  Configuration
+## Configuration
 
 The electricity rate defaults to **₱14.3496/kWh** (Meralco, April 2026) but can be changed directly in the rate field on the main dashboard. The new rate is used immediately for all bill calculations.
 
 ---
 
-##  Data & Privacy
+## Data & Privacy
 
 All user data files (`users.json`, `profile_*.json`, `kilowatch_data_*.json`, `kilowatch_history_*.json`) are generated locally at runtime and are excluded from this repository via `.gitignore`. Passwords are never stored in plaintext — only their SHA-256 hashes are saved.
 
 ---
 
-##  License
+## License
 
 See the [LICENSE](LICENSE) file for details.
 
 ---
 
-##  Author
+## Author
 
 **Kaixer Emmanuel Oscar Antonio M. Alvar**  
 Developed as a Decision Support System for household energy optimization.
