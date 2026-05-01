@@ -18,7 +18,6 @@ KiloWatch is a desktop application that helps households track, analyze, and red
 | 💡 **Smart Recommendations** | Per-appliance and overall energy-saving tips generated automatically |
 | ⇄ **Report Comparison** | Pick any two saved reports and compare consumption changes side-by-side |
 | 🎛 **What-If Simulator** | Drag a slider to simulate reducing an appliance's hours and see savings in real time |
-| 🎯 **Goal Tracker** | Set a monthly kWh or bill target and track progress with a live circular gauge |
 | 📋 **Export** | Save any report as `.TXT` or `.CSV`, or copy it to clipboard |
 | 🌙 **Light / Dark Mode** | Full theme switching with high-contrast palettes for both modes |
 | 💾 **Session Persistence** | Appliances and report history are automatically saved and restored between sessions |
@@ -85,9 +84,6 @@ After generating a report, the What-If window lets users pick any appliance and 
 - kWh saved (or added)
 - Bill saved (or added), if a rate is configured
 
-### 7. Goal Tracker
-Users set a monthly kWh or peso (₱) target. A **live circular gauge** shows current consumption as a percentage of the goal, color-coded green → amber → red as you approach or exceed the limit. The gauge auto-refreshes every 2 seconds against live appliance data.
-
 ---
 
 ## 🚀 Getting Started
@@ -125,8 +121,7 @@ That's it. No virtual environment or dependency installation needed.
 4. Click **⚡ Generate** to produce a ranked energy report.
 5. Use **💡 What If** to simulate reducing usage on any appliance.
 6. Generate multiple reports over time, then use **⇄ Compare A vs B** to track changes.
-7. Open **More ▾ → Goal Tracker** to set a monthly consumption target.
-8. Export any report via **More ▾ → Export as .TXT / .CSV**.
+7. Export any report via **More ▾ → Export as .TXT / .CSV**.
 
 ---
 
