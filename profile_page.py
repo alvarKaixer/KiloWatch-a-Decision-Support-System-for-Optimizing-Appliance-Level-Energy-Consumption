@@ -90,9 +90,6 @@ class ProfilePage:
                  fg=T["ACCENT"], bg=T["CARD"],
                  padx=14, pady=10).pack(side="left")
 
-        tk.Label(name_card, text="(from your account)",
-                 font=("Segoe UI", 8),
-                 fg=T["MUTED"], bg=T["CARD"]).pack(side="left")
 
         # ── Energy Summary ────────────────────────────────────────────────────
         tk.Frame(body, height=1, bg=T["BORDER"]).pack(fill="x", pady=(0, 12))
