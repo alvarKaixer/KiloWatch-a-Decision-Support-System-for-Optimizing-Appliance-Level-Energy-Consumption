@@ -540,7 +540,9 @@ class KiloWatchApp:
 
         left = tk.Frame(body, bg=T["BG"])
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        left.rowconfigure(1, weight=1)   # output card gets all spare height
+        left.rowconfigure(0, weight=0)   # top strip — fixed height
+        left.rowconfigure(1, weight=1)   # output card — grows to fill space
+        left.rowconfigure(2, weight=0)   # chart — fixed, never expands
         left.columnconfigure(0, weight=1)
 
         # ── Compact top strip: inputs + rate + buttons all in one row ──────────
@@ -645,6 +647,36 @@ class KiloWatchApp:
                 activebackground=T["CARD"],
                 relief="flat", bd=0
             ).pack(side="left", padx=(0, 8))
+
+        # Frequency selector
+        freq_row = tk.Frame(fields, bg=T["CARD"])
+        freq_row.grid(row=2, column=0, columnspan=3, sticky="ew",
+                      padx=(0, 0), pady=(8, 0))
+
+        tk.Label(freq_row, text="USAGE FREQUENCY",
+                 font=("Segoe UI", 7, "bold"),
+                 fg=T["MUTED"], bg=T["CARD"]).pack(side="left", padx=(6, 8))
+
+        self.freq_var = tk.StringVar(value="Daily (every day)")
+        freq_options = [
+            "Daily (every day)",
+            "Often (5x a week)",
+            "Sometimes (3x a week)",
+            "Rarely (once a week)",
+        ]
+        freq_menu = tk.OptionMenu(freq_row, self.freq_var, *freq_options)
+        self._style_optionmenu(freq_menu, T["ACCENT"])
+        freq_menu.config(width=22)
+        freq_menu.pack(side="left", ipady=3)
+
+        # Tooltip hint
+        tk.Label(freq_row, text="?",
+                 font=("Segoe UI", 8, "bold"),
+                 fg=T["ACCENT"], bg=T["CARD"],
+                 cursor="hand2").pack(side="left", padx=(6, 0))
+        Tooltip(freq_row.winfo_children()[-1],
+                "How many days per week do you use this appliance?\n"
+                "Daily=7/7 · Often=5/7 · Sometimes=3/7 · Rarely=1/7")
 
 
         self.name_entry.bind("<Return>", lambda e: self.add())
@@ -760,6 +792,46 @@ class KiloWatchApp:
         tk.Label(hdr, text="OUTPUT", font=self.f_small,
                  fg=T["ACCENT2"], bg=T["CARD"]).pack(side="left")
 
+        def _popout_output():
+            def builder(parent):
+                parent.rowconfigure(0, weight=1)
+                parent.columnconfigure(0, weight=1)
+                sb = ttk.Scrollbar(parent, orient="vertical")
+                sb.grid(row=0, column=1, sticky="ns")
+                txt = tk.Text(
+                    parent, font=self.f_output,
+                    bg=T["CARD2"], fg=T["TEXT"],
+                    insertbackground=T["ACCENT"],
+                    selectbackground=T["BORDER"],
+                    relief="flat", bd=0, wrap="word",
+                    yscrollcommand=sb.set, padx=10, pady=8,
+                    state="normal"
+                )
+                txt.grid(row=0, column=0, sticky="nsew")
+                sb.config(command=txt.yview)
+                for tag in self.output.tag_names():
+                    cfg = {}
+                    for k in ("foreground", "font"):
+                        val = self.output.tag_cget(tag, k)
+                        if val:
+                            cfg[k] = val
+                    if cfg:
+                        txt.tag_configure(tag, **cfg)
+                self._copy_text_widget(self.output, txt)
+                txt.config(state="disabled")
+            self._popout_panel("Output Report", builder)
+
+        tk.Button(
+            hdr, text="⤢  Maximize",
+            font=("Segoe UI", 7, "bold"),
+            bg=T["CARD2"], fg=T["MUTED"],
+            activebackground=T["BORDER"],
+            activeforeground=T["TEXT"],
+            relief="flat", bd=0, cursor="hand2",
+            padx=6, pady=2,
+            command=_popout_output
+        ).pack(side="right")
+
         self.status_dot = tk.Canvas(hdr, width=9, height=9,
                                     bg=T["CARD"], highlightthickness=0)
         self.status_dot.create_oval(0, 0, 9, 9,
@@ -805,12 +877,88 @@ class KiloWatchApp:
         chart_card = self._card(parent)
         chart_card.grid(row=2, column=0, sticky="ew", pady=(8, 0))
 
-        tk.Label(chart_card, text="USAGE CHART", font=self.f_small,
-                 fg=self.T["ACCENT2"], bg=self.T["CARD"]
-                 ).pack(anchor="w", padx=16, pady=(10, 4))
+        chart_hdr = tk.Frame(chart_card, bg=self.T["CARD"])
+        chart_hdr.pack(fill="x", padx=16, pady=(10, 4))
+
+        tk.Label(chart_hdr, text="USAGE CHART", font=self.f_small,
+                 fg=self.T["ACCENT2"], bg=self.T["CARD"]).pack(side="left")
+
+        def _popout_chart():
+            def builder(parent):
+                parent.rowconfigure(0, weight=1)
+                parent.columnconfigure(0, weight=1)
+                big_canvas = tk.Canvas(
+                    parent, bg=self.T["CARD"], highlightthickness=0)
+                big_canvas.grid(row=0, column=0, sticky="nsew")
+
+                def _draw(event=None):
+                    big_canvas.delete("all")
+                    data = self._chart_data
+                    if not data:
+                        big_canvas.create_text(
+                            big_canvas.winfo_width() // 2,
+                            big_canvas.winfo_height() // 2,
+                            text="No chart data — generate a report first.",
+                            font=("Segoe UI", 10), fill=self.T["MUTED"])
+                        return
+                    T       = self.T
+                    W       = big_canvas.winfo_width() or 600
+                    H       = big_canvas.winfo_height() or 400
+                    n       = len(data)
+                    pad_top = 20
+                    pad_bot = 20
+                    avail_h = H - pad_top - pad_bot
+                    bar_h   = max(18, min(42, avail_h // n - 10))
+                    gap     = max(6, (avail_h - n * bar_h) // max(n, 1))
+                    label_w = 160
+                    val_w   = 100
+                    bar_area = W - label_w - val_w - 24
+                    max_kwh  = max(kwh for _, kwh in data) or 1
+                    colors   = [T["ACCENT"], T["ACCENT2"], T["ACCENT3"]]
+                    medals   = ["🥇", "🥈", "🥉"]
+
+                    for i, (name, kwh) in enumerate(data):
+                        y      = pad_top + i * (bar_h + gap)
+                        ratio  = kwh / max_kwh
+                        bar_px = max(4, int(ratio * bar_area))
+                        color  = colors[i] if i < 3 else T["MUTED"]
+                        display = (name[:18] + "…") if len(name) > 19 else name
+                        prefix  = medals[i] + "  " if i < 3 else f"  {i+1}.  "
+                        big_canvas.create_text(
+                            label_w - 8, y + bar_h // 2,
+                            text=prefix + display,
+                            anchor="e", font=("Segoe UI", 9),
+                            fill=T["TEXT"])
+                        big_canvas.create_rectangle(
+                            label_w, y, label_w + bar_area, y + bar_h,
+                            fill=T["CARD2"], outline="")
+                        if bar_px > 0:
+                            big_canvas.create_rectangle(
+                                label_w, y, label_w + bar_px, y + bar_h,
+                                fill=color, outline="")
+                        big_canvas.create_text(
+                            label_w + bar_area + 8, y + bar_h // 2,
+                            text=f"{kwh:.3f} kWh/d  ({kwh*30:.1f}/mo)",
+                            anchor="w", font=("Segoe UI", 8),
+                            fill=T["MUTED"])
+
+                big_canvas.bind("<Configure>", _draw)
+
+            self._popout_panel("Usage Chart", builder)
+
+        tk.Button(
+            chart_hdr, text="⤢  Maximize",
+            font=("Segoe UI", 7, "bold"),
+            bg=self.T["CARD2"], fg=self.T["MUTED"],
+            activebackground=self.T["BORDER"],
+            activeforeground=self.T["TEXT"],
+            relief="flat", bd=0, cursor="hand2",
+            padx=6, pady=2,
+            command=_popout_chart
+        ).pack(side="right")
 
         self.chart_canvas = tk.Canvas(
-            chart_card, height=160,
+            chart_card, height=120,          # ← reduced from 160
             bg=self.T["CARD"], highlightthickness=0
         )
         self.chart_canvas.pack(fill="x", padx=16, pady=(0, 12))
@@ -818,6 +966,7 @@ class KiloWatchApp:
         self._chart_data = []
 
         parent.rowconfigure(1, weight=1)
+        parent.rowconfigure(2, weight=0)     # ← chart row must NOT stretch
         self._write_placeholder()
 
     # ── History Panel (right) ─────────────────────────────────────────────────
@@ -912,9 +1061,58 @@ class KiloWatchApp:
 
         tk.Frame(panel, height=1, bg=T["BORDER"]).grid(
             row=5, column=0, sticky="ew", padx=16, pady=(2, 0))
-        tk.Label(panel, text="COMPARISON RESULTS", font=self.f_small,
-                 fg=T["BTN_HIST"], bg=T["CARD"]).grid(
-            row=6, column=0, sticky="w", padx=16, pady=(4, 2))
+
+        cmp_hdr_row = tk.Frame(panel, bg=T["CARD"])
+        cmp_hdr_row.grid(row=6, column=0, sticky="ew", padx=12, pady=(4, 2))
+        cmp_hdr_row.columnconfigure(0, weight=1)
+
+        tk.Label(cmp_hdr_row, text="COMPARISON RESULTS", font=self.f_small,
+                 fg=T["BTN_HIST"], bg=T["CARD"]).grid(row=0, column=0, sticky="w")
+
+        def _popout_cmp():
+            def builder(parent):
+                parent.rowconfigure(0, weight=1)
+                parent.columnconfigure(0, weight=1)
+                sb = ttk.Scrollbar(parent, orient="vertical")
+                sb.grid(row=0, column=1, sticky="ns")
+                txt = tk.Text(
+                    parent, font=("Segoe UI", 10),
+                    bg=T["CARD2"], fg=T["TEXT"],
+                    relief="flat", bd=0, wrap="word",
+                    highlightthickness=1,
+                    highlightbackground=T["BORDER"],
+                    yscrollcommand=sb.set, padx=12, pady=10,
+                    state="normal"
+                )
+                txt.grid(row=0, column=0, sticky="nsew")
+                sb.config(command=txt.yview)
+
+                # Mirror all tags from the original cmp_output
+                for tag in self.cmp_output.tag_names():
+                    cfg = {}
+                    for k in ("foreground", "font"):
+                        val = self.cmp_output.tag_cget(tag, k)
+                        if val:
+                            cfg[k] = val
+                    if cfg:
+                        txt.tag_configure(tag, **cfg)
+
+                # Copy current content with tags preserved
+                self._copy_text_widget(self.cmp_output, txt)
+                txt.config(state="disabled")
+
+            self._popout_panel("Comparison Results", builder)
+
+        tk.Button(
+            cmp_hdr_row, text="⤢  Maximize",
+            font=("Segoe UI", 7, "bold"),
+            bg=T["CARD2"], fg=T["MUTED"],
+            activebackground=T["BORDER"],
+            activeforeground=T["TEXT"],
+            relief="flat", bd=0, cursor="hand2",
+            padx=6, pady=2,
+            command=_popout_cmp
+        ).grid(row=0, column=1, sticky="e")
 
         cmp_frame = tk.Frame(panel, bg=T["CARD"])
         cmp_frame.grid(row=7, column=0, sticky="nsew", padx=12, pady=(0, 12))
@@ -946,6 +1144,18 @@ class KiloWatchApp:
         self.cmp_output.tag_configure("label",   foreground=T["MUTED"],    font=("Segoe UI", 8))
 
         self._cmp_write("Select Report A and Report B\nthen press ⇄ Compare.\n", "same")
+
+    def _copy_text_widget(self, source, dest):
+        """Copy all text and tag ranges from source Text widget into dest."""
+        content = source.get("1.0", tk.END)
+        dest.insert("1.0", content)
+
+        for tag in source.tag_names():
+            if tag == "sel":
+                continue
+            ranges = source.tag_ranges(tag)
+            for i in range(0, len(ranges), 2):
+                dest.tag_add(tag, str(ranges[i]), str(ranges[i + 1]))
 
     # ── Card / Widget helpers ──────────────────────────────────────────────────
     def _card(self, parent):
@@ -1116,7 +1326,46 @@ class KiloWatchApp:
             )
 
         total_h = len(data) * (bar_h + gap) + 16
-        c.config(height=max(80, total_h))
+        # Cap chart height so it never crowds the output area on small screens
+        c.config(height=max(60, min(total_h, 120)))
+
+    def _popout_panel(self, title, content_builder):
+        """Opens a panel's content in a resizable pop-out window."""
+        T = self.T
+        win = tk.Toplevel(self.root)
+        win.title(f"KiloWatch — {title}")
+        win.configure(bg=T["BG"])
+        win.resizable(True, True)
+        win.attributes("-topmost", False)
+
+        sx = self.root.winfo_screenwidth()
+        sy = self.root.winfo_screenheight()
+        W, H = int(sx * 0.6), int(sy * 0.7)
+        win.geometry(f"{W}x{H}+{(sx - W)//2}+{(sy - H)//2}")
+
+    # Header
+        hdr = tk.Frame(win, bg=T["ACCENT2"])
+        hdr.pack(fill="x")
+        tk.Frame(win, height=2, bg=T["ACCENT3"]).pack(fill="x")
+        tk.Label(hdr, text=title, font=("Segoe UI", 12, "bold"),
+             fg="#ffffff", bg=T["ACCENT2"],
+             padx=20, pady=10).pack(side="left")
+        tk.Button(hdr, text="✕  Close",
+              font=("Segoe UI", 9, "bold"),
+              bg=T["DANGER"], fg="#ffffff",
+              activebackground=_darken(T["DANGER"], 15),
+              activeforeground="#ffffff",
+              relief="flat", bd=0, cursor="hand2",
+              padx=10, pady=6,
+              command=win.destroy).pack(side="right", padx=12, pady=8)
+
+        body = tk.Frame(win, bg=T["BG"], padx=16, pady=12)
+        body.pack(fill="both", expand=True)
+        body.rowconfigure(0, weight=1)
+        body.columnconfigure(0, weight=1)
+
+        content_builder(body)
+        return win
 
     def _write_placeholder(self):
         self._unlock()
@@ -1169,7 +1418,10 @@ class KiloWatchApp:
                 watts = info.get("watts", 0)
                 hours = info.get("hours", 0)
                 self.output.insert(tk.END, f"  {i}.  {name}\n", "name")
-                self.output.insert(tk.END, f"       {watts} W  ×  {hours} h/day\n", "kwh")
+                freq = info.get("frequency", 1.0)
+                freq_label = {1.0: "Daily", 5/7: "Often", 3/7: "Sometimes", 1/7: "Rarely"}.get(round(freq, 4), f"{freq:.2f}x")
+                self.output.insert(tk.END,
+                    f"       {watts} W  ×  {hours} h/day  ·  {freq_label}\n", "kwh")
         self.output.insert(tk.END, "\n", "rec")
         self._lock()
 
@@ -1364,7 +1616,14 @@ class KiloWatchApp:
             self._field_error(self.name_entry, f"'{name}' already exists")
             return
 
-        add_appliance(name, watts_f, hours_f)
+        freq_map = {
+            "Daily (every day)":    1.0,
+            "Often (5x a week)":    5/7,
+            "Sometimes (3x a week)": 3/7,
+            "Rarely (once a week)": 1/7,
+        }
+        freq = freq_map.get(self.freq_var.get(), 1.0)
+        add_appliance(name, watts_f, hours_f, freq)
 
         for e in (self.name_entry, self.watts_entry, self.hours_entry):
             e.delete(0, tk.END)
@@ -1376,6 +1635,7 @@ class KiloWatchApp:
             self._field_error(e)
 
         self.time_unit.set("Hours")
+        self.freq_var.set("Daily (every day)")
         self._set_status(False)
         self._refresh_output_appliances()
         self._save_session()
@@ -1428,7 +1688,11 @@ class KiloWatchApp:
             medal = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"  {i}."
             monthly_kwh = kwh * 30
             self.output.insert(tk.END, f"\n{medal}  {name}\n", "name")
-            self.output.insert(tk.END, f"     {format_kwh(kwh, 'kWh/day')}  |  {format_kwh(monthly_kwh, 'kWh/month')}\n", "kwh")
+            data_info  = get_all().get(name, {})
+            freq       = data_info.get("frequency", 1.0)
+            freq_label = {1.0: "Daily", 5/7: "Often", 3/7: "Sometimes", 1/7: "Rarely"}.get(round(freq, 4), f"{freq:.2f}x")
+            self.output.insert(tk.END,
+                f"     {format_kwh(kwh, 'kWh/day')}  |  {format_kwh(monthly_kwh, 'kWh/month')}  ·  {freq_label}\n", "kwh")
             self.output.insert(tk.END,
                 f"     ↳ {generate_recommendation(name, monthly_kwh)}\n", "rec")
 
