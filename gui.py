@@ -2265,8 +2265,8 @@ class KiloWatchApp:
 
         self._wi_slider = tk.Scale(
             body,
-            from_=0.5, to=24,
-            resolution=0.5,
+            from_= 0, to=24,
+            resolution=0,
             orient="horizontal",
             showvalue=False,
             bg=T["BG"], fg=T["TEXT"],
@@ -2282,7 +2282,7 @@ class KiloWatchApp:
         # Min / max tick labels
         tick_row = tk.Frame(body, bg=T["BG"])
         tick_row.pack(fill="x", pady=(0, 14))
-        tk.Label(tick_row, text="0.5 h", font=("Segoe UI", 7),
+        tk.Label(tick_row, text="0 h", font=("Segoe UI", 7),
                  fg=T["MUTED"], bg=T["BG"]).pack(side="left")
         tk.Label(tick_row, text="Max", font=("Segoe UI", 7),
                  fg=T["MUTED"], bg=T["BG"]).pack(side="right")
