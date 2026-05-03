@@ -155,7 +155,7 @@ pip install Pillow
 
 ```bash
 # Clone the repository
-git clone https://github.com/alvarKaixer/KiloWatch---a-Decision-Support-System-for-Optimizing-Appliance-Level-Energy-Consumption.git
+git clone https://github.com/alvarKaixer/KiloWatch-a-Decision-Support-System-for-Optimizing-Appliance-Level-Energy-Consumption.git
 
 cd KiloWatch---a-Decision-Support-System-for-Optimizing-Appliance-Level-Energy-Consumption
 ```
